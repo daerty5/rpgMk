@@ -1,0 +1,15 @@
+{
+   
+    "script": [
+        {
+            "name": "Summer Memories Plus",
+            "search": "test",
+            "url": "https://raw.githubusercontent.com/daerty5/rpgMaker/817083d2857e9bf8348927f42e33090d54f7e9d7/daerty/js/Summer%20Memories%20Plus.js"
+        },
+        {
+            "name": "Summer Memories Plus",
+            "search": "Summer Memories",
+            "url": "https://raw.githubusercontent.com/daerty5/rpgMk/main/daerty/js/Summer Memories Plus.daerty"
+        }
+    ]
+}
