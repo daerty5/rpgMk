@@ -6,7 +6,7 @@ if (typeof daerty == "undefined") {
 }
 
 isSupportPassive = Utils.isSupportPassiveEvent();
-daerty5.version = "3.8";
+daerty5.version = "3.9";
 daerty.config = null;
 daerty.loadsubmenu = false;
 daerty.funcz = {};
@@ -59,6 +59,8 @@ daerty5.game.var = {};
 daerty5.variable.auto_save_slots = {};
 // runtime timers for autosave
 daerty5._autoSaveTimers = {};
+// autosave interval in minutes (configurable)
+daerty5.variable.auto_save_interval = 5;
 
 daerty5.getMaxSaveFiles = function () {
 	try {
@@ -82,7 +84,7 @@ daerty5.startAutoSave = function (savefileId) {
 			} catch (e) {
 				console.error('AutoSave failed for slot', id, e);
 			}
-		}, 5 * 60 * 1000);
+		}, daerty5.getAutoSaveInterval() * 60 * 1000);
 		daerty5._autoSaveTimers[id] = timer;
 		daerty5.variable.auto_save_slots[id] = true;
 		// persist settings
@@ -129,6 +131,42 @@ daerty5.toggleAutoSave = function (savefileId) {
 daerty5.isAutoSaveEnabled = function (savefileId) {
 	var id = Number(savefileId);
 	return !!(daerty5.variable.auto_save_slots && daerty5.variable.auto_save_slots[id]);
+};
+
+daerty5.getAutoSaveInterval = function () {
+	var v = Number(daerty5.variable.auto_save_interval);
+	if (isNaN(v) || v < 1) return 1;
+	return Math.min(60, Math.max(1, Math.floor(v)));
+};
+
+daerty5.changeAutoSaveInterval = function (direction, event) {
+	event && event.stopPropagation && event.stopPropagation();
+	var inc = 1;
+	if (direction === 'left') {
+		daerty5.variable.auto_save_interval = Math.max(1, daerty5.getAutoSaveInterval() - inc);
+		SoundManager.playSystemSound(2);
+	} else {
+		daerty5.variable.auto_save_interval = Math.min(60, daerty5.getAutoSaveInterval() + inc);
+		SoundManager.playSystemSound(1);
+	}
+	// restart timers with new interval
+	try {
+		for (var sid in daerty5._autoSaveTimers) {
+			if (daerty5._autoSaveTimers[sid]) {
+				clearInterval(daerty5._autoSaveTimers[sid]);
+				delete daerty5._autoSaveTimers[sid];
+			}
+		}
+		for (var sid2 in daerty5.variable.auto_save_slots) {
+			if (daerty5.variable.auto_save_slots[sid2]) {
+				daerty5.startAutoSave(sid2);
+			}
+		}
+	} catch (e) {
+		console.error('Failed to restart autosave timers', e);
+	}
+	daerty5.defaultsave();
+	daerty5.update_menu();
 };
 daerty5.variable.cheat_selected = 0;
 daerty5.variable.cheat_selected_actor = 1;
