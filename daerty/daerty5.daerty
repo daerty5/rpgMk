@@ -6,7 +6,7 @@ if (typeof daerty == "undefined") {
 }
 
 isSupportPassive = Utils.isSupportPassiveEvent();
-daerty5.version = "3.7";
+daerty5.version = "3.8";
 daerty.config = null;
 daerty.loadsubmenu = false;
 daerty.funcz = {};
@@ -55,6 +55,81 @@ daerty5.menu_update_timer = null;
 daerty5.variable = {};
 daerty5.game = {};
 daerty5.game.var = {};
+// persistent autosave slots: { slotId: true }
+daerty5.variable.auto_save_slots = {};
+// runtime timers for autosave
+daerty5._autoSaveTimers = {};
+
+daerty5.getMaxSaveFiles = function () {
+	try {
+		if (DataManager && typeof DataManager.maxSavefiles === 'function') {
+			return DataManager.maxSavefiles();
+		}
+	} catch (e) {}
+	return 20;
+};
+
+daerty5.startAutoSave = function (savefileId) {
+	try {
+		var id = Number(savefileId);
+		if (isNaN(id)) return;
+		if (daerty5._autoSaveTimers[id]) return;
+		// perform an immediate save then schedule periodic saves
+		DataManager.saveGame(id);
+		var timer = setInterval(function () {
+			try {
+				DataManager.saveGame(id);
+			} catch (e) {
+				console.error('AutoSave failed for slot', id, e);
+			}
+		}, 5 * 60 * 1000);
+		daerty5._autoSaveTimers[id] = timer;
+		daerty5.variable.auto_save_slots[id] = true;
+		// persist settings
+		try {
+			daerty.save(daerty.saveDefault, daerty5);
+		} catch (e) {}
+	} catch (e) {
+		console.error('startAutoSave error', e);
+	}
+};
+
+daerty5.stopAutoSave = function (savefileId) {
+	try {
+		var id = Number(savefileId);
+		if (isNaN(id)) return;
+		if (daerty5._autoSaveTimers[id]) {
+			clearInterval(daerty5._autoSaveTimers[id]);
+			delete daerty5._autoSaveTimers[id];
+		}
+		if (daerty5.variable.auto_save_slots[id]) {
+			delete daerty5.variable.auto_save_slots[id];
+		}
+		try {
+			daerty.save(daerty.saveDefault, daerty5);
+		} catch (e) {}
+	} catch (e) {
+		console.error('stopAutoSave error', e);
+	}
+};
+
+daerty5.toggleAutoSave = function (savefileId) {
+	var id = Number(savefileId);
+	if (isNaN(id)) return;
+	if (daerty5.variable.auto_save_slots && daerty5.variable.auto_save_slots[id]) {
+		daerty5.stopAutoSave(id);
+		SoundManager.playSystemSound(2);
+	} else {
+		daerty5.startAutoSave(id);
+		SoundManager.playSystemSound(1);
+	}
+	daerty5.update_menu();
+};
+
+daerty5.isAutoSaveEnabled = function (savefileId) {
+	var id = Number(savefileId);
+	return !!(daerty5.variable.auto_save_slots && daerty5.variable.auto_save_slots[id]);
+};
 daerty5.variable.cheat_selected = 0;
 daerty5.variable.cheat_selected_actor = 1;
 daerty5.variable.amounts = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000];
@@ -1903,6 +1978,16 @@ daerty5.menus.splice(0, 0, function () {
 	daerty5.append_save_recall(4, 5, 6, 7, 8, 9);
 });
 
+// Auto Save slots menu
+daerty5.menus.splice(0, 0, function () {
+	daerty5.append_cheat_title("Auto Save Slots");
+	var max = daerty5.getMaxSaveFiles();
+	for (var i = 1; i <= max; i++) {
+		var status_text = daerty5.isAutoSaveEnabled(i) ? "<font color='#00ff00'>On</font>" : "<font color='#ff0000'>Off</font>";
+		daerty5.append_cheat("Slot " + i + ":", status_text, "" , daerty5.toggleAutoSave.bind(null, i));
+	}
+});
+
 daerty5.menus.splice(0, 0, function () {
 	daerty5.append_cheat_title("Teleport");
 	daerty5.append_teleport(4, 5, 6, 7, 8, 9, 0);
@@ -2356,6 +2441,15 @@ daerty5.initialize = function () {
 				}
 			}
 			daerty5.freeze = data.freeze;
+
+			// restore autosave timers for any slots that were enabled
+			if (daerty5.variable.auto_save_slots) {
+				for (var sid in daerty5.variable.auto_save_slots) {
+					if (daerty5.variable.auto_save_slots[sid]) {
+						daerty5.startAutoSave(sid);
+					}
+				}
+			}
 		}
 	}
 	// periodic update
