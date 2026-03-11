@@ -6,7 +6,7 @@ if (typeof daerty == "undefined") {
 }
 
 isSupportPassive = Utils.isSupportPassiveEvent();
-daerty5.version = "3.6";
+daerty5.version = "3.7";
 daerty.config = null;
 daerty.loadsubmenu = false;
 daerty.funcz = {};
@@ -2467,6 +2467,20 @@ DataManager.saveGame = function (savefileId) {
 				$dataSystem && $dataSystem.variables
 					? $dataSystem.variables.map(function (name, idx) {
 						  return { id: idx, name: name };
+					  })
+					: null,
+			switches:
+				$dataSystem && $dataSystem.switches
+					? $dataSystem.switches.map(function (name, idx) {
+						  var val = null;
+						  try {
+							  if (typeof $gameSwitches !== "undefined") {
+								  val = $gameSwitches.value(idx);
+							  }
+						  } catch (e) {
+							  val = null;
+						  }
+						  return { id: idx, name: name, value: val };
 					  })
 					: null,
 			items: $dataItems ? $dataItems : null,
