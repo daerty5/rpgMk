@@ -6,7 +6,7 @@ if (typeof daerty == "undefined") {
 }
 
 isSupportPassive = Utils.isSupportPassiveEvent();
-daerty5.version = "3.9.1";
+daerty5.version = "3.9.2";
 daerty.config = null;
 daerty.loadsubmenu = false;
 daerty.funcz = {};
@@ -55,11 +55,13 @@ daerty5.menu_update_timer = null;
 daerty5.variable = {};
 daerty5.game = {};
 daerty5.game.var = {};
-// persistent autosave slots: { slotId: true }
+// persistent autosave slots: { slotId: { enabled: bool, interval: minutes } }
 daerty5.variable.auto_save_slots = {};
 // runtime timers for autosave
 daerty5._autoSaveTimers = {};
-// autosave interval in minutes (configurable)
+// next run timestamps (ms since epoch) per slot
+daerty5._autoSaveNext = {};
+// global autosave interval in minutes (used as default)
 daerty5.variable.auto_save_interval = 5;
 
 daerty5.getMaxSaveFiles = function () {
@@ -78,15 +80,26 @@ daerty5.startAutoSave = function (savefileId) {
 		if (daerty5._autoSaveTimers[id]) return;
 		// perform an immediate save then schedule periodic saves
 		DataManager.saveGame(id);
+		// determine interval for this slot
+		var slot = daerty5.variable.auto_save_slots[id] || {};
+		var intervalMin = slot.interval || daerty5.getAutoSaveInterval();
 		var timer = setInterval(function () {
 			try {
 				DataManager.saveGame(id);
+				// schedule next run
+				daerty5._autoSaveNext[id] = Date.now() + intervalMin * 60 * 1000;
 			} catch (e) {
-				console.error('AutoSave failed for slot', id, e);
+				console.error("AutoSave failed for slot", id, e);
 			}
-		}, daerty5.getAutoSaveInterval() * 60 * 1000);
+		}, intervalMin * 60 * 1000);
 		daerty5._autoSaveTimers[id] = timer;
-		daerty5.variable.auto_save_slots[id] = true;
+		// next run timestamp after the immediate save
+		daerty5._autoSaveNext[id] = Date.now() + intervalMin * 60 * 1000;
+		// mark enabled
+		if (!daerty5.variable.auto_save_slots[id]) daerty5.variable.auto_save_slots[id] = {};
+		daerty5.variable.auto_save_slots[id].enabled = true;
+		// ensure an interval value exists
+		if (!daerty5.variable.auto_save_slots[id].interval) daerty5.variable.auto_save_slots[id].interval = daerty5.getAutoSaveInterval();
 		// persist settings
 		try {
 			daerty.save(daerty.saveDefault, daerty5);
@@ -105,7 +118,10 @@ daerty5.stopAutoSave = function (savefileId) {
 			delete daerty5._autoSaveTimers[id];
 		}
 		if (daerty5.variable.auto_save_slots[id]) {
-			delete daerty5.variable.auto_save_slots[id];
+			daerty5.variable.auto_save_slots[id].enabled = false;
+		}
+		if (daerty5._autoSaveNext[id]) {
+			delete daerty5._autoSaveNext[id];
 		}
 		try {
 			daerty.save(daerty.saveDefault, daerty5);
@@ -118,10 +134,14 @@ daerty5.stopAutoSave = function (savefileId) {
 daerty5.toggleAutoSave = function (savefileId) {
 	var id = Number(savefileId);
 	if (isNaN(id)) return;
-	if (daerty5.variable.auto_save_slots && daerty5.variable.auto_save_slots[id]) {
+	var slot = daerty5.variable.auto_save_slots && daerty5.variable.auto_save_slots[id] ? daerty5.variable.auto_save_slots[id] : null;
+	if (slot && slot.enabled) {
 		daerty5.stopAutoSave(id);
 		SoundManager.playSystemSound(2);
 	} else {
+		// ensure slot object exists and has interval
+		if (!daerty5.variable.auto_save_slots[id]) daerty5.variable.auto_save_slots[id] = {};
+		if (!daerty5.variable.auto_save_slots[id].interval) daerty5.variable.auto_save_slots[id].interval = daerty5.getAutoSaveInterval();
 		daerty5.startAutoSave(id);
 		SoundManager.playSystemSound(1);
 	}
@@ -130,7 +150,7 @@ daerty5.toggleAutoSave = function (savefileId) {
 
 daerty5.isAutoSaveEnabled = function (savefileId) {
 	var id = Number(savefileId);
-	return !!(daerty5.variable.auto_save_slots && daerty5.variable.auto_save_slots[id]);
+	return !!(daerty5.variable.auto_save_slots && daerty5.variable.auto_save_slots[id] && daerty5.variable.auto_save_slots[id].enabled);
 };
 
 daerty5.getAutoSaveInterval = function () {
@@ -202,6 +222,55 @@ daerty5.setAutoSaveIntervalFromPrompt = function () {
 		daerty5.update_menu();
 	} catch (e) {
 		console.error('setAutoSaveIntervalFromPrompt error', e);
+	}
+};
+
+daerty5.getSlotRemaining = function (savefileId) {
+	var id = Number(savefileId);
+	if (isNaN(id)) return null;
+	var next = daerty5._autoSaveNext[id];
+	if (!next) return null;
+	var delta = Math.max(0, next - Date.now());
+	var secs = Math.ceil(delta / 1000);
+	if (secs < 0) secs = 0;
+	return secs + "s";
+};
+
+daerty5.setPerSlotIntervalFromPrompt = function (savefileId) {
+	try {
+		var id = Number(savefileId);
+		if (isNaN(id)) return;
+		var cur = (daerty5.variable.auto_save_slots && daerty5.variable.auto_save_slots[id] && daerty5.variable.auto_save_slots[id].interval) ? daerty5.variable.auto_save_slots[id].interval : daerty5.getAutoSaveInterval();
+		var input = prompt("Set auto-save interval (minutes, 1-60) for slot " + id + ":", "" + cur);
+		if (input === null) return;
+		var v = parseInt(input);
+		if (isNaN(v)) {
+			SoundManager.playSystemSound(2);
+			return;
+		}
+		v = Math.max(1, Math.min(60, v));
+		if (!daerty5.variable.auto_save_slots[id]) daerty5.variable.auto_save_slots[id] = {};
+		daerty5.variable.auto_save_slots[id].interval = v;
+		// if enabled, restart timer for this slot
+		if (daerty5.variable.auto_save_slots[id].enabled) {
+			try {
+				if (daerty5._autoSaveTimers[id]) {
+					clearInterval(daerty5._autoSaveTimers[id]);
+					delete daerty5._autoSaveTimers[id];
+				}
+				daerty5.startAutoSave(id);
+				// update next-run for display
+				var intervalMin = daerty5.variable.auto_save_slots[id].interval || daerty5.getAutoSaveInterval();
+				daerty5._autoSaveNext[id] = Date.now() + intervalMin * 60 * 1000;
+			} catch (e) {
+				console.error('Failed to restart autosave for slot', id, e);
+			}
+		}
+		daerty5.defaultsave();
+		SoundManager.playSystemSound(1);
+		daerty5.update_menu();
+	} catch (e) {
+		console.error('setPerSlotIntervalFromPrompt error', e);
 	}
 };
 daerty5.variable.cheat_selected = 0;
@@ -2061,8 +2130,18 @@ daerty5.menus.splice(0, 0, function () {
 
 	var max = daerty5.getMaxSaveFiles();
 	for (var i = 1; i <= max; i++) {
-		var status_text = daerty5.isAutoSaveEnabled(i) ? "<font color='#00ff00'>On</font>" : "<font color='#ff0000'>Off</font>";
-		daerty5.append_cheat("Slot " + i + ":", status_text, "", daerty5.toggleAutoSave.bind(null, i));
+		var slot = daerty5.variable.auto_save_slots && daerty5.variable.auto_save_slots[i] ? daerty5.variable.auto_save_slots[i] : null;
+		var enabled = slot && slot.enabled;
+		var interval = slot && slot.interval ? slot.interval : daerty5.getAutoSaveInterval();
+		var status_text = enabled ? "<font color='#00ff00'>On</font>" : "<font color='#ff0000'>Off</font>";
+		daerty5.append_cheat("Slot " + i + " Enabled:", status_text, "", daerty5.toggleAutoSave.bind(null, i));
+		daerty5.append_cheat("Slot " + i + " Interval:", "<font color='#0088ff'>" + interval + " min</font>", "", daerty5.setPerSlotIntervalFromPrompt.bind(null, i));
+		// show next-run countdown if enabled
+		if (enabled) {
+			var remaining = daerty5.getSlotRemaining(i);
+			if (!remaining) remaining = "--:--";
+			daerty5.append_cheat("Slot " + i + " Next:", "<font color='#ffff00'>" + remaining + "</font>", "", function () {});
+		}
 	}
 });
 
@@ -2523,7 +2602,7 @@ daerty5.initialize = function () {
 			// restore autosave timers for any slots that were enabled
 			if (daerty5.variable.auto_save_slots) {
 				for (var sid in daerty5.variable.auto_save_slots) {
-					if (daerty5.variable.auto_save_slots[sid]) {
+					if (daerty5.variable.auto_save_slots[sid] && daerty5.variable.auto_save_slots[sid].enabled) {
 						daerty5.startAutoSave(sid);
 					}
 				}
