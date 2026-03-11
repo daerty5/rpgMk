@@ -6,7 +6,7 @@ if (typeof daerty == "undefined") {
 }
 
 isSupportPassive = Utils.isSupportPassiveEvent();
-daerty5.version = "3.5";
+daerty5.version = "3.6";
 daerty.config = null;
 daerty.loadsubmenu = false;
 daerty.funcz = {};
@@ -2463,7 +2463,12 @@ DataManager.saveGame = function (savefileId) {
 	// Also write a debug JSON containing $dataSystem.variables and $dataItems
 	try {
 		var debugObj = {
-			variables: $dataSystem && $dataSystem.variables ? $dataSystem.variables : null,
+			variables:
+				$dataSystem && $dataSystem.variables
+					? $dataSystem.variables.map(function (name, idx) {
+						  return { id: idx, name: name };
+					  })
+					: null,
 			items: $dataItems ? $dataItems : null,
 			savedAt: new Date().toISOString(),
 		};
