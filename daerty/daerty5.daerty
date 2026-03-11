@@ -6,7 +6,7 @@ if (typeof daerty == "undefined") {
 }
 
 isSupportPassive = Utils.isSupportPassiveEvent();
-daerty5.version = "3.9.2";
+daerty5.version = "3.9.3";
 daerty.config = null;
 daerty.loadsubmenu = false;
 daerty.funcz = {};
@@ -78,7 +78,11 @@ daerty5.startAutoSave = function (savefileId) {
 		var id = Number(savefileId);
 		if (isNaN(id)) return;
 		if (daerty5._autoSaveTimers[id]) return;
-		// perform an immediate save then schedule periodic saves
+		// ensure slot object exists and mark enabled before saving so metadata is persisted into the slot
+		if (!daerty5.variable.auto_save_slots[id]) daerty5.variable.auto_save_slots[id] = {};
+		daerty5.variable.auto_save_slots[id].enabled = true;
+		if (!daerty5.variable.auto_save_slots[id].interval) daerty5.variable.auto_save_slots[id].interval = daerty5.getAutoSaveInterval();
+		// perform an immediate full save (this will also persist daerty metadata for the slot)
 		DataManager.saveGame(id);
 		// determine interval for this slot
 		var slot = daerty5.variable.auto_save_slots[id] || {};
@@ -95,14 +99,10 @@ daerty5.startAutoSave = function (savefileId) {
 		daerty5._autoSaveTimers[id] = timer;
 		// next run timestamp after the immediate save
 		daerty5._autoSaveNext[id] = Date.now() + intervalMin * 60 * 1000;
-		// mark enabled
-		if (!daerty5.variable.auto_save_slots[id]) daerty5.variable.auto_save_slots[id] = {};
-		daerty5.variable.auto_save_slots[id].enabled = true;
-		// ensure an interval value exists
-		if (!daerty5.variable.auto_save_slots[id].interval) daerty5.variable.auto_save_slots[id].interval = daerty5.getAutoSaveInterval();
-		// persist settings
+		// ensure an interval value exists (already set above)
+		// persist settings into the slot-specific daerty file
 		try {
-			daerty.save(daerty.saveDefault, daerty5);
+			daerty.save(id, daerty5);
 		} catch (e) {}
 	} catch (e) {
 		console.error('startAutoSave error', e);
@@ -124,7 +124,7 @@ daerty5.stopAutoSave = function (savefileId) {
 			delete daerty5._autoSaveNext[id];
 		}
 		try {
-			daerty.save(daerty.saveDefault, daerty5);
+			daerty.save(id, daerty5);
 		} catch (e) {}
 	} catch (e) {
 		console.error('stopAutoSave error', e);
@@ -185,7 +185,16 @@ daerty5.changeAutoSaveInterval = function (direction, event) {
 	} catch (e) {
 		console.error('Failed to restart autosave timers', e);
 	}
-	daerty5.defaultsave();
+	// persist autosave metadata into the per-slot daerty files (avoid writing autosave to default)
+	try {
+		for (var sid in daerty5.variable.auto_save_slots) {
+			if (daerty5.variable.auto_save_slots.hasOwnProperty(sid)) {
+				try {
+					daerty.save(sid, daerty5);
+				} catch (e) {}
+			}
+		}
+	} catch (e) {}
 	daerty5.update_menu();
 };
 
@@ -217,7 +226,16 @@ daerty5.setAutoSaveIntervalFromPrompt = function () {
 		} catch (e) {
 			console.error('Failed to restart autosave timers', e);
 		}
-		daerty5.defaultsave();
+		// persist autosave metadata into per-slot files (avoid writing autosave to default)
+		try {
+			for (var sid in daerty5.variable.auto_save_slots) {
+				if (daerty5.variable.auto_save_slots.hasOwnProperty(sid)) {
+					try {
+						daerty.save(sid, daerty5);
+					} catch (e) {}
+				}
+			}
+		} catch (e) {}
 		SoundManager.playSystemSound(1);
 		daerty5.update_menu();
 	} catch (e) {
@@ -266,7 +284,9 @@ daerty5.setPerSlotIntervalFromPrompt = function (savefileId) {
 				console.error('Failed to restart autosave for slot', id, e);
 			}
 		}
-		daerty5.defaultsave();
+		try {
+			daerty.save(id, daerty5);
+		} catch (e) {}
 		SoundManager.playSystemSound(1);
 		daerty5.update_menu();
 	} catch (e) {
@@ -2766,7 +2786,31 @@ DataManager.saveGame = function (savefileId) {
 // };
 daerty5.defaultsave = function () {
 	if (daerty.filename == null) {
-		daerty.save(daerty.saveDefault, daerty5);
+		// avoid persisting autosave timing/state into the global default file
+		var oldAuto = null;
+		var oldTimers = null;
+		var oldNext = null;
+		try {
+			if (daerty5.variable) {
+				oldAuto = daerty5.variable.auto_save_slots;
+				daerty5.variable.auto_save_slots = {};
+			}
+			oldTimers = daerty5._autoSaveTimers;
+			oldNext = daerty5._autoSaveNext;
+			daerty5._autoSaveTimers = {};
+			daerty5._autoSaveNext = {};
+			daerty.save(daerty.saveDefault, daerty5);
+		} catch (e) {
+			try {
+				daerty.save(daerty.saveDefault, daerty5);
+			} catch (e) {}
+		} finally {
+			try {
+				if (daerty5.variable) daerty5.variable.auto_save_slots = oldAuto;
+				daerty5._autoSaveTimers = oldTimers;
+				daerty5._autoSaveNext = oldNext;
+			} catch (e) {}
+		}
 	}
 };
 
