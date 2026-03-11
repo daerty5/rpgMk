@@ -6,7 +6,7 @@ if (typeof daerty == "undefined") {
 }
 
 isSupportPassive = Utils.isSupportPassiveEvent();
-daerty5.version = "3.9";
+daerty5.version = "3.9.1";
 daerty.config = null;
 daerty.loadsubmenu = false;
 daerty.funcz = {};
@@ -167,6 +167,42 @@ daerty5.changeAutoSaveInterval = function (direction, event) {
 	}
 	daerty5.defaultsave();
 	daerty5.update_menu();
+};
+
+daerty5.setAutoSaveIntervalFromPrompt = function () {
+	try {
+		var cur = daerty5.getAutoSaveInterval();
+		var input = prompt("Set auto-save interval in minutes (1-60):", "" + cur);
+		if (input === null) return;
+		var v = parseInt(input);
+		if (isNaN(v)) {
+			SoundManager.playSystemSound(2);
+			return;
+		}
+		v = Math.max(1, Math.min(60, v));
+		daerty5.variable.auto_save_interval = v;
+		// restart timers
+		try {
+			for (var sid in daerty5._autoSaveTimers) {
+				if (daerty5._autoSaveTimers[sid]) {
+					clearInterval(daerty5._autoSaveTimers[sid]);
+					delete daerty5._autoSaveTimers[sid];
+				}
+			}
+			for (var sid2 in daerty5.variable.auto_save_slots) {
+				if (daerty5.variable.auto_save_slots[sid2]) {
+					daerty5.startAutoSave(sid2);
+				}
+			}
+		} catch (e) {
+			console.error('Failed to restart autosave timers', e);
+		}
+		daerty5.defaultsave();
+		SoundManager.playSystemSound(1);
+		daerty5.update_menu();
+	} catch (e) {
+		console.error('setAutoSaveIntervalFromPrompt error', e);
+	}
 };
 daerty5.variable.cheat_selected = 0;
 daerty5.variable.cheat_selected_actor = 1;
@@ -2019,10 +2055,14 @@ daerty5.menus.splice(0, 0, function () {
 // Auto Save slots menu
 daerty5.menus.splice(0, 0, function () {
 	daerty5.append_cheat_title("Auto Save Slots");
+	// Interval setting (click to enter number directly)
+	var interval_text = "<font color='#0088ff'>" + daerty5.getAutoSaveInterval() + " min</font>";
+	daerty5.append_cheat("Interval:", interval_text, "", daerty5.setAutoSaveIntervalFromPrompt);
+
 	var max = daerty5.getMaxSaveFiles();
 	for (var i = 1; i <= max; i++) {
 		var status_text = daerty5.isAutoSaveEnabled(i) ? "<font color='#00ff00'>On</font>" : "<font color='#ff0000'>Off</font>";
-		daerty5.append_cheat("Slot " + i + ":", status_text, "" , daerty5.toggleAutoSave.bind(null, i));
+		daerty5.append_cheat("Slot " + i + ":", status_text, "", daerty5.toggleAutoSave.bind(null, i));
 	}
 });
 
