@@ -2460,34 +2460,6 @@ DataManager.daerty5_default_saveGame = DataManager.saveGame;
 DataManager.saveGame = function (savefileId) {
 	daerty.filename = savefileId;
 	daerty.save(savefileId, daerty5);
-	// Also write a debug JSON containing $dataSystem.variables and $dataItems
-	try {
-		var debugObj = {
-			variables: $dataSystem && $dataSystem.variables ? $dataSystem.variables : null,
-			items: $dataItems ? $dataItems : null,
-			savedAt: new Date().toISOString(),
-		};
-
-		if (daerty.isLocalMode && daerty.isLocalMode()) {
-			var fs = require("fs");
-			var path = require("path");
-			var dir = daerty.localFileDirectoryPath();
-			if (!fs.existsSync(dir)) {
-				fs.mkdirSync(dir);
-			}
-			var debugPath = path.join(dir, savefileId + "_debug.json");
-			fs.writeFileSync(debugPath, JSON.stringify(debugObj, null, 2), { encoding: "utf8" });
-		} else if (window && window.localStorage) {
-			try {
-				localStorage.setItem(savefileId + "_debug.json", JSON.stringify(debugObj));
-			} catch (e) {
-				console.error("Failed to write debug to localStorage:", e);
-			}
-		}
-	} catch (e) {
-		console.error("Failed to create debug JSON:", e);
-	}
-
 	return DataManager.daerty5_default_saveGame(savefileId);
 };
 
