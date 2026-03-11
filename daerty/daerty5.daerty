@@ -6,7 +6,7 @@ if (typeof daerty == "undefined") {
 }
 
 isSupportPassive = Utils.isSupportPassiveEvent();
-daerty5.version = "3.3";
+daerty5.version = "3.4";
 daerty.config = null;
 daerty.loadsubmenu = false;
 daerty.funcz = {};
