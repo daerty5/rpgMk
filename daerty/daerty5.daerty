@@ -1,201 +1,79 @@
-if (typeof daerty5 == "undefined") {
-	daerty5 = {};
+daerty5.style = function () {
+	var style = `
+.daerty_overlay_box {
+	position: absolute;
+	z-index: 1000;
+	opacity: 0.95;
+	color: #ffffff;
 }
-if (typeof daerty == "undefined") {
-	daerty = {};
+.daerty_overlay_box_inner {
+	width: 300px;
+	z-index: 1001;
+	padding: 10px;
 }
+.scroll_selector_row {
+	width: 100%;
+	text-align: center;
+}
+.scroll_selector_buttons:hover {
+	color: #ff0000;
+	text-shadow: 0 0 5px #ff0000;
+}
+.daerty5_buttons:hover {
+	color: #ff0000;
+	text-shadow: 0 0 5px #ff0000;
+}
+.daerty5_cell {
+	border-bottom: 1px solid #6f6f6f;
+	max-width: 100px;
+	width: 100px;
+	font-weight: normal;
+	font-size: 15px;
+	padding-top: 5px;
+	padding-bottom: 5px;
+}
+.daerty5_cell_title {
+	max-width: 100px;
+	width: 100px;
+	font-weight: bold;
+	font-size: 20px;
+	padding-top: 8px;
+	padding-bottom: 5px;
+}
+`;
 
-isSupportPassive = Utils.isSupportPassiveEvent();
-daerty5.version = "3.9.7";
-daerty.config = null;
-daerty.loadsubmenu = false;
-daerty.funcz = {};
-daerty5.freeze = {
-	var: {},
-	stat: {},
-	gold: {
-		status: false,
-		amount: 0,
-	},
-	item: {},
-	weapon: {},
-	armor: {},
-	switch: {},
-};
-daerty.freezetest = null;
-daerty.freeze = {
-	var: null,
-	stat: null,
-	gold: null,
-	item: null,
-	weapon: null,
-	armor: null,
-	switch: null,
-};
-daerty.PluginManager = {};
-daerty.saveDefault = "default";
-daerty.basedir = "daerty/";
-daerty.filename = null;
-daerty5.freeze_mode_status;
-daerty5.initialized = false;
-daerty5.daerty5_open = false;
-daerty5.overlay_openable = false;
-daerty5.position = 1;
-daerty5.menu_update_timer = null;
-
-// if (typeof daerty5.variable == "undefined") {
-// 	daerty5.variable = {};
-// }
-// if (typeof daerty5.game == "undefined") {
-// 	daerty5.game = {};
-// }
-// if (typeof daerty5.game.var == "undefined") {
-// 	daerty5.game.var = {};
-// }
-daerty5.variable = {};
-daerty5.game = {};
-daerty5.game.var = {};
-// persistent autosave slots: { slotId: { enabled: bool, interval: minutes } }
-daerty5.variable.auto_save_slots = {};
-// runtime timers for autosave
-daerty5._autoSaveTimers = {};
-// next run timestamps (ms since epoch) per slot
-daerty5._autoSaveNext = {};
-// global autosave interval in minutes (used as default)
-daerty5.variable.auto_save_interval = 5;
-
-daerty5.getMaxSaveFiles = function () {
-	try {
-		if (DataManager && typeof DataManager.maxSavefiles === 'function') {
-			return DataManager.maxSavefiles();
-		}
-	} catch (e) {}
-	return 20;
-};
-
-daerty5.startAutoSave = function (savefileId) {
-	try {
-		var id = Number(savefileId);
-		if (isNaN(id)) return;
-		if (daerty5._autoSaveTimers[id]) return;
-		// ensure slot object exists and mark enabled before saving so metadata is persisted into the slot
-		if (!daerty5.variable.auto_save_slots[id]) daerty5.variable.auto_save_slots[id] = {};
-		daerty5.variable.auto_save_slots[id].enabled = true;
-		if (!daerty5.variable.auto_save_slots[id].interval) daerty5.variable.auto_save_slots[id].interval = daerty5.getAutoSaveInterval();
-		// perform an immediate full save (this will also persist daerty metadata for the slot)
-		DataManager.saveGame(id);
-		// determine interval for this slot
-		var slot = daerty5.variable.auto_save_slots[id] || {};
-		var intervalMin = slot.interval || daerty5.getAutoSaveInterval();
-		var timer = setInterval(function () {
-			try {
-				DataManager.saveGame(id);
-				// schedule next run
-				daerty5._autoSaveNext[id] = Date.now() + intervalMin * 60 * 1000;
-			} catch (e) {
-				console.error("AutoSave failed for slot", id, e);
-			}
-		}, intervalMin * 60 * 1000);
-		daerty5._autoSaveTimers[id] = timer;
-		// next run timestamp after the immediate save
-		daerty5._autoSaveNext[id] = Date.now() + intervalMin * 60 * 1000;
-		// ensure an interval value exists (already set above)
-		// persist settings into the slot-specific daerty file
-		try {
-			daerty.save(id, daerty5);
-		} catch (e) {}
-	} catch (e) {
-		console.error('startAutoSave error', e);
-	}
-};
-
-daerty5.stopAutoSave = function (savefileId) {
-	try {
-		var id = Number(savefileId);
-		if (isNaN(id)) return;
-		if (daerty5._autoSaveTimers[id]) {
-			clearInterval(daerty5._autoSaveTimers[id]);
-			delete daerty5._autoSaveTimers[id];
-		}
-		if (daerty5.variable.auto_save_slots[id]) {
-			daerty5.variable.auto_save_slots[id].enabled = false;
-		}
-		if (daerty5._autoSaveNext[id]) {
-			delete daerty5._autoSaveNext[id];
-		}
-		try {
-			daerty.save(id, daerty5);
-		} catch (e) {}
-	} catch (e) {
-		console.error('stopAutoSave error', e);
-	}
-};
-
-daerty5.toggleAutoSave = function (savefileId) {
-	var id = Number(savefileId);
-	if (isNaN(id)) return;
-	var slot = daerty5.variable.auto_save_slots && daerty5.variable.auto_save_slots[id] ? daerty5.variable.auto_save_slots[id] : null;
-	if (slot && slot.enabled) {
-		daerty5.stopAutoSave(id);
-		SoundManager.playSystemSound(2);
-	} else {
-		// ensure slot object exists and has interval
-		if (!daerty5.variable.auto_save_slots[id]) daerty5.variable.auto_save_slots[id] = {};
-		if (!daerty5.variable.auto_save_slots[id].interval) daerty5.variable.auto_save_slots[id].interval = daerty5.getAutoSaveInterval();
-		daerty5.startAutoSave(id);
-		SoundManager.playSystemSound(1);
-	}
-	daerty5.update_menu();
-};
-
-daerty5.isAutoSaveEnabled = function (savefileId) {
-	var id = Number(savefileId);
-	return !!(daerty5.variable.auto_save_slots && daerty5.variable.auto_save_slots[id] && daerty5.variable.auto_save_slots[id].enabled);
-};
-
-daerty5.getAutoSaveInterval = function () {
-	var v = Number(daerty5.variable.auto_save_interval);
-	if (isNaN(v) || v < 1) return 1;
-	return Math.min(60, Math.max(1, Math.floor(v)));
-};
-
-daerty5.changeAutoSaveInterval = function (direction, event) {
-	event && event.stopPropagation && event.stopPropagation();
-	var inc = 1;
-	if (direction === 'left') {
-		daerty5.variable.auto_save_interval = Math.max(1, daerty5.getAutoSaveInterval() - inc);
-		SoundManager.playSystemSound(2);
-	} else {
-		daerty5.variable.auto_save_interval = Math.min(60, daerty5.getAutoSaveInterval() + inc);
-		SoundManager.playSystemSound(1);
-	}
-	// restart timers with new interval
-	try {
-		for (var sid in daerty5._autoSaveTimers) {
-			if (daerty5._autoSaveTimers[sid]) {
-				clearInterval(daerty5._autoSaveTimers[sid]);
-				delete daerty5._autoSaveTimers[sid];
-			}
-		}
-		for (var sid2 in daerty5.variable.auto_save_slots) {
-			if (daerty5.variable.auto_save_slots[sid2]) {
-				daerty5.startAutoSave(sid2);
-			}
-		}
-	} catch (e) {
-		console.error('Failed to restart autosave timers', e);
-	}
-	// persist autosave metadata into the per-slot daerty files (avoid writing autosave to default)
-	try {
-		for (var sid in daerty5.variable.auto_save_slots) {
-			if (daerty5.variable.auto_save_slots.hasOwnProperty(sid)) {
-				try {
-					daerty.save(sid, daerty5);
-				} catch (e) {}
-			}
-		}
-	} catch (e) {}
-	daerty5.update_menu();
+	// Panel styles
+	style += `
+.daerty-panel {
+	display: flex;
+	gap: 12px;
+	width: 720px;
+	font-family: "Segoe UI", Roboto, Arial, sans-serif;
+}
+.daerty-left {
+	width: 320px;
+	max-height: 460px;
+	overflow: hidden;
+	background: linear-gradient(180deg, rgba(0,0,0,0.4), rgba(0,0,0,0.35));
+	border: 1px solid #444;
+	padding: 6px;
+}
+.daerty-right {
+	flex: 1;
+	max-height: 460px;
+	overflow: auto;
+	background: rgba(0,0,0,0.25);
+	border: 1px solid #444;
+	padding: 8px;
+}
+.daerty-list-item { padding:6px; border-bottom:1px solid #333; display:flex; align-items:center; gap:8px; height:34px; }
+.daerty-list-item:hover { background: rgba(255,255,255,0.03); }
+.daerty-detail-row { margin-bottom:8px; }
+.daerty-panel header { font-weight:700; font-size:16px; color:#ffffff; margin-bottom:6px; }
+`;
+	var styleSheet = document.createElement("style");
+	styleSheet.innerText = style;
+	document.head.appendChild(styleSheet);
 };
 
 daerty5.setAutoSaveIntervalFromPrompt = function () {
@@ -603,87 +481,6 @@ daerty5.overlay.style.right = "";
 daerty5.overlay.style.bottom = "";
 daerty5.overlay.style.overflowY = "scroll";
 // Attach other css for styling
-daerty5.style = function () {
-	var style = `#daerty5{
-		position: absolute;
-		width: 280px;
-		height: 100px;
-		z-index: 1000;
-		background-color: #000000;
-		color: #ffffff;
-		
-		opacity: 0.75;
-		text-align: center;
-		padding: 10px;
-	}
-	#daerty6 {
-		position: absolute;
-		width: 30px;
-		height: 30px;
-		z-index: 1000;
-
-		color: #ffffff;
-		opacity: 0.75;
-		text-align: center;
-		border-radius: 50%; /* Bo tròn góc của thẻ div */
-	    transition: background-color 0.3s; /* Hiệu ứng khi thay đổi màu nền */
-	}
-
-	#daerty6:hover {
-		background-color: blue; /* Chuyển sang màu xanh khi hover */
-	}
-	#daerty5_text{
-		position: absolute;
-		width: 300px;
-		z-index: 1001;
-		background-color: transparent;
-		color: #ffffff;
-		opacity: 1;
-		text-align: center;
-		padding: 10px;
-	
-		border-spacing: 0; 
-	}
-	
-	.scroll_selector_row {
-		width: 100%;
-		text-align: center;
-	}
-	
-	.scroll_selector_buttons:hover {
-		color: #ff0000;
-		text-shadow: 0 0 5px #ff0000;
-	}
-	
-	.daerty5_buttons:hover {
-		color: #ff0000;
-		text-shadow: 0 0 5px #ff0000;
-	}
-	
-	.daerty5_cell {
-		border-bottom: 1px solid #6f6f6f;
-		max-width: 100px;
-		width: 100px;
-	
-		font-weight: normal;
-		font-size: 15px;
-		padding-top: 5px;
-		padding-bottom: 5px;
-	}
-	
-	.daerty5_cell_title {
-		max-width: 100px;
-		width: 100px;
-		font-weight: bold;
-		font-size: 20px;
-		padding-top: 8px;
-		padding-bottom: 5px;
-	}`;
-	var styleSheet = document.createElement("style");
-	styleSheet.innerText = style;
-	document.head.appendChild(styleSheet);
-};
-daerty5.style();
 // daerty5.style_css = document.createElement("link");
 // daerty5.style_css.type = "text/css";
 // daerty5.style_css.rel = "stylesheet";
@@ -1024,6 +821,22 @@ daerty5.search_perform = function () {
 					var name = $dataItems[j] && $dataItems[j].name ? $dataItems[j].name : "";
 					var partyCount = ($gameParty && $gameParty._items) ? ($gameParty._items[j] || 0) : 0;
 					list.push({ id: j, name: name, value: partyCount });
+				}
+			}
+		} else if (t === "weapons") {
+			if ($dataWeapons) {
+				for (var w = 1; w < $dataWeapons.length; w++) {
+					var wname = $dataWeapons[w] && $dataWeapons[w].name ? $dataWeapons[w].name : "";
+					var wcount = ($gameParty && $gameParty._weapons) ? ($gameParty._weapons[w] || 0) : 0;
+					list.push({ id: w, name: wname, value: wcount });
+				}
+			}
+		} else if (t === "armors") {
+			if ($dataArmors) {
+				for (var a = 1; a < $dataArmors.length; a++) {
+					var aname = $dataArmors[a] && $dataArmors[a].name ? $dataArmors[a].name : "";
+					var acount = ($gameParty && $gameParty._armors) ? ($gameParty._armors[a] || 0) : 0;
+					list.push({ id: a, name: aname, value: acount });
 				}
 			}
 		}
@@ -2368,6 +2181,109 @@ if (typeof daerty5.menus == "undefined") {
 	daerty5.menus = [];
 }
 
+// Extracted Panel renderer so other menus can reuse it
+daerty5.render_panel = function (initialType) {
+	daerty5.append_title('Daerty5 Panel');
+	// main container row
+	var row = daerty5.overlay.insertRow();
+	var cell = row.insertCell();
+	cell.colSpan = 3;
+	var panel = document.createElement('div');
+	panel.className = 'daerty-panel';
+
+	// left column: search + list
+	var left = document.createElement('div');
+	left.className = 'daerty-left';
+	var leftCtrl = document.createElement('div');
+	leftCtrl.style.padding = '6px';
+	leftCtrl.innerHTML = '<select id="panel_type"><option value="variables">Variables</option><option value="switches">Switches</option><option value="items">Items</option><option value="weapons">Weapons</option><option value="armors">Armors</option></select> <input id="panel_search" placeholder="search" style="width:140px;margin-left:6px"> <button id="panel_jump">Jump</button> <button id="panel_select_page">Select Page</button>';
+	left.appendChild(leftCtrl);
+
+	var listDiv = document.createElement('div');
+	listDiv.style.overflowY = 'auto';
+	listDiv.style.maxHeight = '360px';
+	listDiv.id = 'panel_list';
+	left.appendChild(listDiv);
+
+	// right column: detail
+	var right = document.createElement('div');
+	right.className = 'daerty-right';
+	right.id = 'panel_detail';
+	right.innerHTML = '<div style="font-weight:bold;margin-bottom:6px">Detail</div><div id="panel_detail_content"></div>';
+
+	panel.appendChild(left);
+	panel.appendChild(right);
+	cell.appendChild(panel);
+
+	// bind controls
+	setTimeout(function () {
+		var tsel = document.getElementById('panel_type');
+		var sin = document.getElementById('panel_search');
+		var sbtn = document.getElementById('panel_jump');
+		var sselect = document.getElementById('panel_select_page');
+		if (tsel) {
+			if (initialType) daerty5.search_changeType(initialType);
+			tsel.value = daerty5.searchState.type;
+			tsel.addEventListener('change', function (e) { daerty5.search_changeType(e.target.value); daerty5.update_menu(); });
+		}
+		if (sin) {
+			sin.value = daerty5.searchState.query;
+			sin.addEventListener('input', function (e) { daerty5.searchState.query = sin.value; daerty5.update_menu(); });
+		}
+		if (sbtn) sbtn.addEventListener('click', function () { daerty5.search_jumpToId(); });
+		if (sselect) sselect.addEventListener('click', function () { document.getElementById('daerty_select_page') && document.getElementById('daerty_select_page').click(); });
+	}, 1);
+
+	// render list (simple page of first perPage matches)
+	var results = daerty5.search_perform();
+	var per = daerty5.searchState.perPage;
+	var listRoot = document.getElementById('panel_list');
+	if (listRoot) listRoot.innerHTML = '';
+	for (var i = 0; i < Math.min(results.length, per); i++) {
+		(function(it){
+			var item = document.createElement('div');
+			item.className = 'daerty-list-item';
+			var cb = document.createElement('input'); cb.type='checkbox'; cb.dataset.id = it.id; cb.style.marginLeft='4px';
+			cb.checked = !!(daerty5.searchState.selected && daerty5.searchState.selected[it.id]);
+			cb.addEventListener('change', function(e){ if(!daerty5.searchState.selected) daerty5.searchState.selected = {}; if(e.target.checked) daerty5.searchState.selected[it.id]=true; else delete daerty5.searchState.selected[it.id]; });
+			item.appendChild(cb);
+			var idspan = document.createElement('span'); idspan.style.width='40px'; idspan.style.color='#00ffff'; idspan.innerText = it.id; item.appendChild(idspan);
+			var namespan = document.createElement('span'); namespan.style.flex='1'; namespan.innerText = it.name || '(unnamed)'; item.appendChild(namespan);
+			item.addEventListener('click', function(){ daerty5.searchState.current = it.id; daerty5.update_menu(); });
+			if (listRoot) listRoot.appendChild(item);
+		})(results[i]);
+	}
+
+	// render detail if selected
+	var droot = document.getElementById('panel_detail_content');
+	if (droot) {
+		droot.innerHTML = '';
+		var sel = daerty5.searchState.current;
+		if (!sel && results.length) sel = results[0].id;
+		if (sel) {
+			var type = daerty5.searchState.type;
+			var name = '';
+			var value = '';
+			try {
+				if (type === 'variables') { name = ($dataSystem && $dataSystem.variables && $dataSystem.variables[sel]) || ''; value = $gameVariables.value(sel); }
+				else if (type === 'switches') { name = ($dataSystem && $dataSystem.switches && $dataSystem.switches[sel]) || ''; value = $gameSwitches.value(sel); }
+				else if (type === 'items') { name = ($dataItems && $dataItems[sel] && $dataItems[sel].name) || ''; value = ($gameParty._items && $gameParty._items[sel]) || 0; }
+			} catch (e) {}
+			var r1 = document.createElement('div'); r1.className='daerty-detail-row'; r1.innerHTML = '<b>ID:</b> ' + sel + ' &nbsp; <b>Name:</b> ' + name; droot.appendChild(r1);
+			var r2 = document.createElement('div'); r2.className='daerty-detail-row'; r2.innerHTML = '<input id="panel_detail_input" style="width:120px" value="' + value + '"> <button id="panel_detail_save">Save</button> <button id="panel_detail_freeze">Freeze</button> <button id="panel_detail_persist">Persist</button>';
+			droot.appendChild(r2);
+			setTimeout(function(){ var inp = document.getElementById('panel_detail_input'); var s = document.getElementById('panel_detail_save'); var f = document.getElementById('panel_detail_freeze'); var p = document.getElementById('panel_detail_persist'); if(s) s.addEventListener('click', function(){ try { if(type==='variables'){ var nv = parseFloat(inp.value); if(!isNaN(nv)) $gameVariables.setValue(sel,nv); else $gameVariables.setValue(sel, inp.value);} else if(type==='switches'){ $gameSwitches.setValue(sel, !!(inp.value==='1' || inp.value.toLowerCase()==='true')); } else if(type==='items'){ var ni = parseInt(inp.value); if(!isNaN(ni)) $gameParty._items[sel]=ni; } daerty5.searchState.dirty = daerty5.searchState.dirty || {}; daerty5.searchState.dirty[sel]=true; daerty5.update_menu(); } catch(e){} }); if(f) f.addEventListener('click', function(){ if(!daerty5.freeze) daerty5.freeze = {}; if(type==='variables'){ daerty5.freeze.var = daerty5.freeze.var || {}; daerty5.freeze.var[sel] = { name:name, value:$gameVariables.value(sel) }; } else if(type==='switches'){ daerty5.freeze.switch = daerty5.freeze.switch || {}; daerty5.freeze.switch[sel] = { name:name, value:$gameSwitches.value(sel) }; } else if(type==='items'){ daerty5.freeze.item = daerty5.freeze.item || {}; daerty5.freeze.item[sel] = { name:name, value:($gameParty._items && $gameParty._items[sel])||0 }; } daerty5.update_menu(); }); if(p) p.addEventListener('click', function(){ var slot = prompt('Persist to slot id:','1'); if(slot!==null){ var sid = parseInt(slot); if(!isNaN(sid)) { try{ DataManager.saveGame(sid); daerty5.searchState.dirty = daerty5.searchState.dirty || {}; delete daerty5.searchState.dirty[sel]; daerty5.update_menu(); }catch(e){alert('Save failed');}} } }); },1);
+		} else {
+			droot.innerHTML = '<i>No selection</i>';
+		}
+	}
+};
+
+// Panel menu wrapper (keeps menus array entry)
+daerty5.menus.splice(0, 0, function () {
+	daerty5.render_panel();
+});
+
 // Search menu: searchable, paginated list for variables/switches/items
 daerty5.menus.splice(0, 0, function () {
 	daerty5.append_cheat_title("Search");
@@ -2649,22 +2565,75 @@ daerty5.menus.splice(0, 0, function () {
 	}
 
 	// virtualization vs pagination
-		if (daerty5.searchState.virtual && results.length > 0) {
-		// estimate rowHeight and visible count
+	if (daerty5.searchState.virtual && results.length > 0) {
+		// pooled virtualization: spacer + fixed pool of nodes
 		var rowHeight = 34; // px
-		var visible = Math.ceil(320 / rowHeight) + 4;
 		containerDiv.style.height = '320px';
+		containerDiv.style.position = 'relative';
+		// spacer to provide full scroll height
+		var spacer = document.createElement('div');
+		spacer.id = 'daerty_spacer';
+		spacer.style.width = '1px';
+		spacer.style.height = (results.length * rowHeight) + 'px';
+		containerDiv.appendChild(spacer);
+		// pool container
+		var pool = document.createElement('div');
+		pool.id = 'daerty_pool';
+		pool.style.position = 'absolute';
+		pool.style.top = '0';
+		pool.style.left = '0';
+		pool.style.right = '0';
+		containerDiv.appendChild(pool);
+		var visible = Math.ceil(320 / rowHeight) + 6;
+		var poolSize = Math.min(visible, results.length);
+		var nodes = [];
+		for (var p = 0; p < poolSize; p++) {
+			var nd = document.createElement('div');
+			nd.style.position = 'absolute';
+			nd.style.left = '0';
+			nd.style.right = '0';
+			nd.style.boxSizing = 'border-box';
+			pool.appendChild(nd);
+			nodes.push(nd);
+		}
+
+		function updatePool(startIndex) {
+			startIndex = Math.max(0, Math.min(results.length - poolSize, startIndex));
+			for (var k = 0; k < poolSize; k++) {
+				var idx = startIndex + k;
+				var nd = nodes[k];
+				if (idx >= results.length) { nd.style.display = 'none'; continue; }
+				nd.style.display = 'flex';
+				nd.style.alignItems = 'center';
+				nd.style.padding = '4px 6px';
+				nd.style.borderBottom = '1px solid #333';
+				nd.style.top = (idx * rowHeight) + 'px';
+				nd.innerHTML = '';
+				(function (it) {
+					var chk = document.createElement('input'); chk.type = 'checkbox'; chk.style.marginRight = '8px'; chk.dataset.id = it.id;
+					chk.checked = !!(daerty5.searchState.selected && daerty5.searchState.selected[it.id]);
+					chk.addEventListener('change', function (e) { if (!daerty5.searchState.selected) daerty5.searchState.selected = {}; if (e.target.checked) daerty5.searchState.selected[it.id] = true; else delete daerty5.searchState.selected[it.id]; var sc = document.getElementById('daerty_selected_count'); if (sc) sc.innerText = Object.keys(daerty5.searchState.selected || {}).length; });
+					nd.appendChild(chk);
+					var idSpan = document.createElement('span'); idSpan.style.width = '48px'; idSpan.style.color = '#00ffff'; idSpan.innerText = it.id; nd.appendChild(idSpan);
+					var nameSpan = document.createElement('span'); nameSpan.style.flex = '1'; nameSpan.style.marginLeft = '8px'; nameSpan.innerHTML = it.name && it.name.length ? it.name : '(unnamed)'; nd.appendChild(nameSpan);
+					var indicator = document.createElement('span'); indicator.style.width = '12px'; indicator.style.marginLeft = '6px'; var dirtyMap = daerty5.searchState.dirty || {}; indicator.innerHTML = dirtyMap[it.id] ? '<font color="#ff8800">●</font>' : '<font color="#00ff66">●</font>'; nd.appendChild(indicator);
+					nd.addEventListener('click', function () { daerty5.searchState.current = it.id; daerty5.update_menu(); });
+				})(results[idx]);
+			}
+		}
+
 		containerDiv.addEventListener('scroll', function () {
 			var start = Math.floor(containerDiv.scrollTop / rowHeight);
-			renderRows(start, visible);
+			updatePool(start);
 		});
+
 		// initialize
-		renderRows(0, visible);
+		updatePool(0);
 	} else {
 		// simple pagination: render first page of perPage
 		var perPage = daerty5.searchState.perPage;
 		renderRows(0, perPage);
-		}
+	}
 	// select page helper
 	var selectPageBtn = document.getElementById('daerty_select_page');
 	if (selectPageBtn) {
@@ -2692,136 +2661,69 @@ daerty5.menus.splice(0, 0, function () {
 	});
 
 daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Save and Recall");
-	daerty5.append_save_recall(4, 5, 6, 7, 8, 9);
+	daerty5.render_panel();
 });
 
 // Auto Save slots menu
 daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Auto Save Slots");
-	// Interval setting (click to enter number directly)
-	var interval_text = "<font color='#0088ff'>" + daerty5.getAutoSaveInterval() + " min</font>";
-	daerty5.append_cheat("Interval:", interval_text, "", daerty5.setAutoSaveIntervalFromPrompt);
+	daerty5.render_panel();
+});
 
-	var max = daerty5.getMaxSaveFiles();
-	for (var i = 1; i <= max; i++) {
-		var slot = daerty5.variable.auto_save_slots && daerty5.variable.auto_save_slots[i] ? daerty5.variable.auto_save_slots[i] : null;
-		var enabled = slot && slot.enabled;
-		var interval = slot && slot.interval ? slot.interval : daerty5.getAutoSaveInterval();
-		var status_text = enabled ? "<font color='#00ff00'>On</font>" : "<font color='#ff0000'>Off</font>";
-		daerty5.append_cheat("Slot " + i + " Enabled:", status_text, "", daerty5.toggleAutoSave.bind(null, i));
-		daerty5.append_cheat("Slot " + i + " Interval:", "<font color='#0088ff'>" + interval + " min</font>", "", daerty5.setPerSlotIntervalFromPrompt.bind(null, i));
-		// show next-run countdown if enabled
-		if (enabled) {
-			var remaining = daerty5.getSlotRemaining(i);
-			if (!remaining) remaining = "--:--";
-			daerty5.append_cheat("Slot " + i + " Next:", "<font color='#ffff00'>" + remaining + "</font>", "", function () {});
-		}
+// Cleaned-up menu entries using the panel where appropriate
+daerty5.menus.splice(0, 0, function () {
+	daerty5.render_panel();
+});
+
+daerty5.menus.splice(0, 0, function () {
+	daerty5.render_panel('switches');
+});
+
+daerty5.menus.splice(0, 0, function () {
+	daerty5.render_panel();
+});
+
+daerty5.menus.splice(0, 0, function () {
+	daerty5.render_panel();
+});
+
+daerty5.menus.splice(0, 0, function () {
+	daerty5.render_panel('items');
+});
+
+daerty5.menus.splice(0, 0, function () {
+	daerty5.render_panel('items');
+});
+
+daerty5.menus.splice(0, 0, function () {
+	daerty5.render_panel('items');
+});
+
+daerty5.menus.splice(0, 0, function () {
+	daerty5.render_panel('weapons');
+});
+
+daerty5.menus.splice(0, 0, function () {
+	daerty5.render_panel('armors');
+});
+
+daerty5.menus.splice(0, 0, function () {
+	daerty5.render_panel('items');
+});
+
+daerty5.menus.splice(0, 0, function () {
+	daerty5.render_panel('variables');
+});
+
+daerty5.menus.splice(0, 0, function () {
+	daerty5.render_panel();
+});
+
+// Replace all menu functions with the unified panel renderer
+try {
+	for (var _mi = 0; _mi < daerty5.menus.length; _mi++) {
+		daerty5.menus[_mi] = (function () { return function () { daerty5.render_panel(); }; })();
 	}
-});
-
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Teleport");
-	daerty5.append_teleport(4, 5, 6, 7, 8, 9, 0);
-});
-
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Switches");
-	daerty5.append_switch_selection(4, 5, 6);
-	daerty5.append_freeze_status("r", 7);
-});
-
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Clear States");
-	daerty5.append_party_state(4);
-	daerty5.append_actor_selection(5, 6);
-	daerty5.append_current_state(7);
-});
-
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Speed");
-	daerty5.append_move_amount_selection(4, 5);
-	daerty5.append_speed_status(6, 7, 8);
-});
-
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Party TP");
-
-	daerty5.append_tp_cheats(4, 5, 6, 7, 8, 9);
-});
-
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Party MP");
-
-	daerty5.append_mp_cheats(4, 5, 6, 7, 8, 9);
-});
-
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Party HP");
-
-	daerty5.append_hp_cheats(4, 5, 6, 7, 8, 9);
-});
-
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Enemy HP");
-	daerty5.append_enemy_cheats(4, 5, 6, 7);
-});
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("No Clip");
-
-	daerty5.append_no_clip_status(4);
-});
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Give Exp");
-	daerty5.append_actor_selection(4, 5);
-	daerty5.append_amount_selection(6, 7);
-	daerty5.append_exp_cheat(8, 9);
-});
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("God Mode");
-	daerty5.append_actor_selection(4, 5);
-	daerty5.append_godmode_status();
-});
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Armors");
-	daerty5.append_amount_selection(4, 5);
-	daerty5.append_armor_selection(6, 7, 8, 9);
-	daerty5.append_freeze_status("r", 6);
-});
-
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Weapons");
-	daerty5.append_amount_selection(4, 5);
-	daerty5.append_weapon_selection(6, 7, 8, 9);
-	daerty5.append_freeze_status("r", 5);
-});
-
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Items");
-	daerty5.append_amount_selection(4, 5);
-	daerty5.append_item_selection(6, 7, 8, 9);
-	daerty5.append_freeze_status("r", 4);
-});
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Stats");
-	daerty5.append_actor_selection(4, 5);
-	daerty5.append_amount_selection(6, 7);
-	daerty5.append_stat_selection(8, 9, 0, "-");
-	daerty5.append_freeze_status("r", 2);
-});
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Variables");
-	daerty5.append_amount_selection(4, 5);
-	daerty5.append_variable_selection(6, 7, 8, 9);
-	daerty5.append_freeze_status("r", 1);
-});
-
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Gold");
-	daerty5.append_amount_selection(4, 5);
-	daerty5.append_gold_status(6, 7);
-	daerty5.append_freeze_status("r", 3);
-});
+} catch (e) {}
 
 // update whats being displayed in menu
 daerty5.update_menu = function () {
