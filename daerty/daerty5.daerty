@@ -472,6 +472,25 @@ daerty5.overlay_box2.style.top = "5px";
 daerty5.overlay_box2.style.right = "";
 daerty5.overlay_box2.style.bottom = "";
 daerty5.overlay_box2.style.background = "#ffffff";
+// make the small opener visible and clickable by default
+daerty5.overlay_box2.style.position = 'fixed';
+daerty5.overlay_box2.style.left = '8px';
+daerty5.overlay_box2.style.top = '8px';
+daerty5.overlay_box2.style.width = '28px';
+daerty5.overlay_box2.style.height = '28px';
+daerty5.overlay_box2.style.border = '1px solid #666';
+daerty5.overlay_box2.style.borderRadius = '4px';
+daerty5.overlay_box2.style.cursor = 'pointer';
+daerty5.overlay_box2.style.opacity = '0.9';
+daerty5.overlay_box2.style.zIndex = 100000;
+daerty5.overlay_box2.style.display = 'flex';
+daerty5.overlay_box2.style.alignItems = 'center';
+daerty5.overlay_box2.style.justifyContent = 'center';
+daerty5.overlay_box2.innerText = 'D';
+
+// allow opening via keyboard by default (before initialize)
+daerty5.overlay_openable = true;
+daerty5.daerty5_open = false;
 
 daerty5.overlay = document.createElement("table");
 daerty5.overlay.id = "daerty5_text";
