@@ -2756,7 +2756,22 @@ daerty5.update_menu = function () {
 	// clear key listeners
 	daerty5.key_listeners = {};
 
-	daerty5.menus[daerty5.variable.cheat_selected]();
+	// safety: ensure selected menu index is valid and callable
+	var selIdx = daerty5.variable.cheat_selected || 0;
+	if (!daerty5.menus || !daerty5.menus.length) {
+		// ensure at least the panel exists
+		daerty5.menus = [function () { daerty5.render_panel(); }];
+	}
+	if (selIdx < 0 || selIdx > daerty5.menus.length - 1 || typeof daerty5.menus[selIdx] !== 'function') {
+		selIdx = 0;
+		daerty5.variable.cheat_selected = 0;
+	}
+	try {
+		daerty5.menus[selIdx]();
+	} catch (e) {
+		// fallback to panel on error
+		try { daerty5.render_panel(); } catch (ee) { console.error('render panel fallback failed', ee); }
+	}
 
 	daerty5.position_menu();
 };
@@ -2787,6 +2802,13 @@ daerty5.overlay.addEventListener(
 	},
 	isSupportPassive ? { passive: false } : false
 );
+
+// Ensure the small overlay opener is present in the document so click can open menu
+try {
+	if (typeof document !== 'undefined' && daerty5.overlay_box2 && !document.body.contains(daerty5.overlay_box2)) {
+		document.body.appendChild(daerty5.overlay_box2);
+	}
+} catch (e) {}
 
 /////////////////////////////////////////////////
 // Cheat Menu Key Listener
