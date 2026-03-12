@@ -6,7 +6,7 @@ if (typeof daerty == "undefined") {
 }
 
 isSupportPassive = Utils.isSupportPassiveEvent();
-daerty5.version = "3.9.6";
+daerty5.version = "3.9.7";
 daerty.config = null;
 daerty.loadsubmenu = false;
 daerty.funcz = {};
@@ -2407,12 +2407,15 @@ daerty5.menus.splice(0, 0, function () {
 				}, 200);
 			});
 			// focus shortcut: '/'
-			window.addEventListener('keydown', function (ev) {
-				if (ev.key === '/' && document.activeElement !== inp) {
-					ev.preventDefault();
-					try { inp.focus(); inp.select(); } catch (e) {}
-				}
-			});
+			if (!daerty5._searchFocusHandlerAdded) {
+				daerty5._searchFocusHandlerAdded = true;
+				window.addEventListener('keydown', function (ev) {
+					if (ev.key === '/' && document.activeElement !== inp) {
+						ev.preventDefault();
+						try { inp.focus(); inp.select(); } catch (e) {}
+					}
+				});
+			}
 		}
 		if (jb) jb.addEventListener('click', function () { daerty5.search_jumpToId(); });
 		if (vb) vb.addEventListener('click', function () { daerty5.searchState.virtual = !daerty5.searchState.virtual; daerty5.update_menu(); });
@@ -2822,6 +2825,18 @@ daerty5.menus.splice(0, 0, function () {
 
 // update whats being displayed in menu
 daerty5.update_menu = function () {
+	// If a text input inside the overlay currently has focus, avoid re-rendering
+	try {
+		var active = document.activeElement;
+		if (active && daerty5.overlay && daerty5.overlay.contains(active)) {
+			var tag = active.tagName && active.tagName.toUpperCase();
+			if (tag === 'INPUT' || tag === 'TEXTAREA' || active.isContentEditable) {
+				// skip automatic update to avoid breaking user input
+				return;
+			}
+		}
+	} catch (e) {}
+
 	// clear menu
 	daerty5.overlay.innerHTML = "";
 	// clear key listeners
