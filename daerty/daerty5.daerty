@@ -6,7 +6,7 @@ if (typeof daerty == "undefined") {
 }
 
 isSupportPassive = Utils.isSupportPassiveEvent();
-daerty5.version = "3.9.3";
+daerty5.version = "3.9.4";
 daerty.config = null;
 daerty.loadsubmenu = false;
 daerty.funcz = {};
@@ -992,6 +992,219 @@ daerty5.scroll_cheat = function (direction, event) {
 daerty5.append_cheat_title = function (cheat_name) {
 	daerty5.append_title("Daerty5 (" + daerty5.version + ")");
 	daerty5.append_scroll_selector(cheat_name, 2, 3, daerty5.scroll_cheat);
+};
+
+// Search UI state and helpers
+daerty5.searchState = {
+	type: "variables", // variables | switches | items
+	query: "",
+	page: 0,
+	perPage: 50,
+};
+
+daerty5.search_perform = function () {
+	var list = [];
+	var t = daerty5.searchState.type;
+	try {
+		if (t === "variables") {
+			if ($dataSystem && $dataSystem.variables) {
+				for (var i = 1; i < $dataSystem.variables.length; i++) {
+					list.push({ id: i, name: $dataSystem.variables[i] || "", value: typeof $gameVariables !== 'undefined' ? $gameVariables.value(i) : null });
+				}
+			}
+		} else if (t === "switches") {
+			if ($dataSystem && $dataSystem.switches) {
+				for (var i2 = 1; i2 < $dataSystem.switches.length; i2++) {
+					list.push({ id: i2, name: $dataSystem.switches[i2] || "", value: typeof $gameSwitches !== 'undefined' ? $gameSwitches.value(i2) : null });
+				}
+			}
+		} else if (t === "items") {
+			if ($dataItems) {
+				for (var j = 1; j < $dataItems.length; j++) {
+					var name = $dataItems[j] && $dataItems[j].name ? $dataItems[j].name : "";
+					var partyCount = ($gameParty && $gameParty._items) ? ($gameParty._items[j] || 0) : 0;
+					list.push({ id: j, name: name, value: partyCount });
+				}
+			}
+		}
+	} catch (e) {
+		console.error('search_perform error', e);
+	}
+
+	var q = (daerty5.searchState.query || "").toString().toLowerCase().trim();
+	// fuzzy scoring helper
+	daerty5.fuzzyScore = daerty5.fuzzyScore || function (needle, haystack) {
+		if (!needle || !haystack) return 0;
+		var n = needle.toLowerCase();
+		var h = haystack.toLowerCase();
+		if (h.indexOf(n) !== -1) return 100 - h.indexOf(n);
+		// subsequence match
+		var i = 0, j = 0;
+		while (i < n.length && j < h.length) {
+			if (n[i] === h[j]) i++;
+			j++;
+		}
+		if (i === n.length) return 50 - j / 100;
+		return 0;
+	};
+
+	if (q.length > 0) {
+		// compute score for each item and keep only matches
+		var scored = [];
+		for (var k = 0; k < list.length; k++) {
+			var it = list[k];
+			var hay = (it.id ? it.id.toString() + ' ' : '') + (it.name || '') + ' ' + (it.value === null || it.value === undefined ? '' : it.value.toString());
+			var score = 0;
+			// prefer id exact or prefix
+			if (it.id && it.id.toString().indexOf(q) === 0) score = 120;
+			score = Math.max(score, daerty5.fuzzyScore(q, hay));
+			if (score > 0) scored.push({ score: score, it: it });
+		}
+		scored.sort(function (a, b) { return b.score - a.score; });
+		list = scored.map(function (s) { return s.it; });
+	} else {
+		// default sort by id
+		list.sort(function (a, b) { return a.id - b.id; });
+	}
+
+	return list;
+};
+
+// Bulk and persistence helpers
+daerty5.search_bulkSet = function () {
+	var sel = daerty5.searchState.selected || {};
+	var ids = Object.keys(sel).map(function (s) { return parseInt(s); });
+	if (!ids.length) { alert('No items selected'); return; }
+	var input = prompt('Set value for selected (' + ids.length + '):','');
+	if (input === null) return;
+	var t = daerty5.searchState.type;
+	ids.forEach(function (id) {
+		try {
+			if (t === 'switches') {
+				var v = input.toLowerCase();
+				var val = v === 'true' || v === '1' || v === 'on' ? true : (v === 'false' || v === '0' || v === 'off' ? false : Boolean(input));
+				$gameSwitches.setValue(id, !!val);
+			} else if (t === 'variables') {
+				var nv = parseFloat(input);
+				if (!isNaN(nv)) $gameVariables.setValue(id, nv); else $gameVariables.setValue(id, input);
+			} else if (t === 'items') {
+				var nv2 = parseInt(input);
+				if (!isNaN(nv2)) $gameParty._items[id] = nv2;
+			}
+		} catch (e) {}
+	});
+	daerty5.update_menu();
+};
+
+daerty5.search_bulkFreeze = function () {
+	var sel = daerty5.searchState.selected || {};
+	var ids = Object.keys(sel).map(function (s) { return parseInt(s); });
+	if (!ids.length) { alert('No items selected'); return; }
+	if (!confirm('Freeze ' + ids.length + ' selected?')) return;
+	var t = daerty5.searchState.type;
+	ids.forEach(function (id) {
+		try {
+			if (t === 'variables') {
+				var name = ($dataSystem && $dataSystem.variables && $dataSystem.variables[id]) || '';
+				daerty5.freeze.var[id] = { name: name, value: $gameVariables.value(id) };
+			} else if (t === 'switches') {
+				var name2 = ($dataSystem && $dataSystem.switches && $dataSystem.switches[id]) || '';
+				daerty5.freeze.switch[id] = { name: name2, value: $gameSwitches.value(id) };
+			} else if (t === 'items') {
+				var name3 = ($dataItems && $dataItems[id] && $dataItems[id].name) || '';
+				daerty5.freeze.item[id] = { name: name3, value: ($gameParty && $gameParty._items) ? ($gameParty._items[id] || 0) : 0 };
+			}
+		} catch (e) {}
+	});
+	daerty5.update_menu();
+};
+
+daerty5.search_bulkClear = function () {
+	var sel = daerty5.searchState.selected || {};
+	var ids = Object.keys(sel).map(function (s) { return parseInt(s); });
+	if (!ids.length) { alert('No items selected'); return; }
+	if (!confirm('Clear ' + ids.length + ' selected?')) return;
+	var t = daerty5.searchState.type;
+	ids.forEach(function (id) {
+		try {
+			if (t === 'variables') $gameVariables.setValue(id, 0);
+			else if (t === 'switches') $gameSwitches.setValue(id, false);
+			else if (t === 'items') $gameParty._items[id] = 0;
+		} catch (e) {}
+	});
+	daerty5.update_menu();
+};
+
+daerty5.search_persist = function () {
+	var txt = prompt('Persist edits by saving to slot id (enter slot number):','');
+	if (txt === null) return;
+	var id = parseInt(txt);
+	if (isNaN(id)) { alert('Invalid slot'); return; }
+	try { DataManager.saveGame(id); } catch (e) { console.error('persist save error', e); alert('Save failed'); }
+};
+
+daerty5.search_setValue = function (id) {
+	var t = daerty5.searchState.type;
+	var cur = null;
+	try {
+		if (t === 'variables') cur = $gameVariables.value(id);
+		else if (t === 'switches') cur = $gameSwitches.value(id);
+		else if (t === 'items') cur = ($gameParty && $gameParty._items) ? ($gameParty._items[id] || 0) : 0;
+	} catch (e) {
+		cur = null;
+	}
+	var input = prompt('Set value for ' + t + ' id ' + id + ':', '' + cur);
+	if (input === null) return;
+	// try to coerce boolean for switches
+	try {
+		if (t === 'switches') {
+			var v = input.toLowerCase();
+			var val = v === 'true' || v === '1' || v === 'on' ? true : (v === 'false' || v === '0' || v === 'off' ? false : Boolean(input));
+			$gameSwitches.setValue(id, !!val);
+		} else if (t === 'variables') {
+			var nv = parseFloat(input);
+			if (!isNaN(nv)) $gameVariables.setValue(id, nv);
+			else $gameVariables.setValue(id, input);
+		} else if (t === 'items') {
+			var nv2 = parseInt(input);
+			if (!isNaN(nv2)) $gameParty._items[id] = nv2;
+		}
+	} catch (e) {
+		console.error('search_setValue error', e);
+	}
+	daerty5.update_menu();
+};
+
+daerty5.search_changeType = function (newType) {
+	daerty5.searchState.type = newType;
+	daerty5.searchState.page = 0;
+	daerty5.update_menu();
+};
+
+daerty5.search_jumpToId = function () {
+	var txt = prompt('Jump to ID:','');
+	if (txt === null) return;
+	var id = parseInt(txt);
+	if (isNaN(id)) return;
+	// compute which page contains this id
+	var list = daerty5.search_perform();
+	var idx = list.findIndex(function(it){return it.id === id;});
+	if (idx >= 0) {
+		daerty5.searchState.page = Math.floor(idx / daerty5.searchState.perPage);
+		daerty5.update_menu();
+	} else {
+		alert('ID not found in current type/filter');
+	}
+};
+
+daerty5.search_prevPage = function () {
+	if (daerty5.searchState.page > 0) daerty5.searchState.page--;
+	daerty5.update_menu();
+};
+
+daerty5.search_nextPage = function (totalPages) {
+	if (daerty5.searchState.page < totalPages - 1) daerty5.searchState.page++;
+	daerty5.update_menu();
 };
 
 // Left and right scrollers for handling switching selected actors
@@ -2135,6 +2348,187 @@ daerty5.append_freeze_status = function (key, mode) {
 if (typeof daerty5.menus == "undefined") {
 	daerty5.menus = [];
 }
+
+// Search menu: searchable, paginated list for variables/switches/items
+daerty5.menus.splice(0, 0, function () {
+	daerty5.append_cheat_title("Search");
+
+	// Controls row: type selector, search input, jump, virtualization toggle, bulk actions, persist
+	var row = daerty5.overlay.insertRow();
+	var cell1 = row.insertCell();
+	cell1.className = "daerty5_cell_title";
+	cell1.colSpan = 3;
+	cell1.innerHTML = '<select id="daerty_search_type"><option value="variables">Variables</option><option value="switches">Switches</option><option value="items">Items</option></select> <input id="daerty_search_input" placeholder="search id/name/value" style="width:120px;margin-left:6px;"> <button id="daerty_search_jump">Jump</button> <button id="daerty_toggle_virtual">Virtual</button> <button id="daerty_bulk_set">Set Selected</button> <button id="daerty_bulk_freeze">Freeze Selected</button> <button id="daerty_bulk_clear">Clear Selected</button> <button id="daerty_persist">Persist Edits</button>';
+
+	// bind controls (they are recreated each menu render)
+	setTimeout(function () {
+		var sel = document.getElementById('daerty_search_type');
+		var inp = document.getElementById('daerty_search_input');
+		var jb = document.getElementById('daerty_search_jump');
+		var vb = document.getElementById('daerty_toggle_virtual');
+		var bset = document.getElementById('daerty_bulk_set');
+		var bfreeze = document.getElementById('daerty_bulk_freeze');
+		var bclear = document.getElementById('daerty_bulk_clear');
+		var bpersist = document.getElementById('daerty_persist');
+		if (sel) {
+			sel.value = daerty5.searchState.type;
+			sel.addEventListener('change', function (e) { daerty5.search_changeType(e.target.value); });
+		}
+		if (inp) {
+			inp.value = daerty5.searchState.query;
+			inp.addEventListener('keydown', function (ev) {
+				if (ev.key === '/') { ev.preventDefault(); }
+			});
+			var timer = null;
+			inp.addEventListener('input', function (e) {
+				if (timer) clearTimeout(timer);
+				timer = setTimeout(function () {
+					daerty5.searchState.query = inp.value;
+					daerty5.update_menu();
+				}, 200);
+			});
+			// focus shortcut: '/'
+			window.addEventListener('keydown', function (ev) {
+				if (ev.key === '/' && document.activeElement !== inp) {
+					ev.preventDefault();
+					try { inp.focus(); inp.select(); } catch (e) {}
+				}
+			});
+		}
+		if (jb) jb.addEventListener('click', function () { daerty5.search_jumpToId(); });
+		if (vb) vb.addEventListener('click', function () { daerty5.searchState.virtual = !daerty5.searchState.virtual; daerty5.update_menu(); });
+		if (bset) bset.addEventListener('click', function () { daerty5.search_bulkSet(); });
+		if (bfreeze) bfreeze.addEventListener('click', function () { daerty5.search_bulkFreeze(); });
+		if (bclear) bclear.addEventListener('click', function () { daerty5.search_bulkClear(); });
+		if (bpersist) bpersist.addEventListener('click', function () { daerty5.search_persist(); });
+	}, 1);
+
+	// Results
+	var results = daerty5.search_perform();
+	var total = results.length;
+	var per = daerty5.searchState.perPage;
+	var page = 0;
+
+	// Info row
+	var infoRow = daerty5.overlay.insertRow();
+	var cA = infoRow.insertCell();
+	cA.className = 'daerty5_cell';
+	cA.innerHTML = 'Results: <font color="#00ff00">' + total + '</font>';
+	var cB = infoRow.insertCell();
+	cB.className = 'daerty5_cell';
+	cB.innerHTML = '<font color="#00ffff">Virtual:</font> ' + (!!daerty5.searchState.virtual);
+	var cC = infoRow.insertCell();
+	cC.className = 'daerty5_cell daerty5_buttons';
+	cC.innerHTML = '<font color="#ffffff">Selected:</font> <span id="daerty_selected_count">0</span>';
+
+	// container row for results; supports virtualization when enabled
+	var containerRow = daerty5.overlay.insertRow();
+	var containerCell = containerRow.insertCell();
+	containerCell.colSpan = 3;
+	var containerDiv = document.createElement('div');
+	containerDiv.style.width = '460px';
+	containerDiv.style.height = '320px';
+	containerDiv.style.overflowY = 'auto';
+	containerDiv.style.background = 'rgba(0,0,0,0.2)';
+	containerDiv.id = 'daerty_search_container';
+	containerCell.appendChild(containerDiv);
+
+	// build row elements helper
+	function renderRows(startIndex, count) {
+		containerDiv.innerHTML = '';
+		var endIndex = Math.min(results.length, startIndex + count);
+		for (var i = startIndex; i < endIndex; i++) {
+			(function (it) {
+				var rowDiv = document.createElement('div');
+				rowDiv.style.display = 'flex';
+				rowDiv.style.alignItems = 'center';
+				rowDiv.style.padding = '4px 6px';
+				rowDiv.style.borderBottom = '1px solid #333';
+
+				var chk = document.createElement('input');
+				chk.type = 'checkbox';
+				chk.style.marginRight = '8px';
+				chk.dataset.id = it.id;
+				chk.checked = !!(daerty5.searchState.selected && daerty5.searchState.selected[it.id]);
+				chk.addEventListener('change', function (e) {
+					if (!daerty5.searchState.selected) daerty5.searchState.selected = {};
+					if (e.target.checked) daerty5.searchState.selected[it.id] = true; else delete daerty5.searchState.selected[it.id];
+					var sc = document.getElementById('daerty_selected_count');
+					if (sc) sc.innerText = Object.keys(daerty5.searchState.selected || {}).length;
+				});
+				rowDiv.appendChild(chk);
+
+				var idSpan = document.createElement('span');
+				idSpan.style.width = '48px';
+				idSpan.style.color = '#00ffff';
+				idSpan.innerText = it.id;
+				rowDiv.appendChild(idSpan);
+
+				var nameSpan = document.createElement('span');
+				nameSpan.style.flex = '1';
+				nameSpan.style.marginLeft = '8px';
+				nameSpan.innerHTML = it.name && it.name.length ? it.name : '(unnamed)';
+				rowDiv.appendChild(nameSpan);
+
+				// value editor
+				if (daerty5.searchState.type === 'switches') {
+					var cb = document.createElement('input');
+					cb.type = 'checkbox';
+					cb.checked = !!it.value;
+					cb.addEventListener('change', function () {
+						try { $gameSwitches.setValue(it.id, !!cb.checked); } catch (e) {}
+						daerty5.update_menu();
+					});
+					rowDiv.appendChild(cb);
+				} else {
+					var inp = document.createElement('input');
+					inp.type = 'text';
+					inp.value = (it.value === null || it.value === undefined) ? '' : it.value;
+					inp.style.width = '80px';
+					inp.dataset.id = it.id;
+					inp.addEventListener('keydown', function (ev) {
+						if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); }
+						else if (ev.key === 'Escape') { ev.preventDefault(); daerty5.update_menu(); }
+					});
+					inp.addEventListener('blur', function (ev) {
+						var v = ev.target.value;
+						try {
+							if (daerty5.searchState.type === 'variables') {
+								var nv = parseFloat(v);
+								if (!isNaN(nv)) $gameVariables.setValue(it.id, nv); else $gameVariables.setValue(it.id, v);
+							} else if (daerty5.searchState.type === 'items') {
+								var nv2 = parseInt(v);
+								if (!isNaN(nv2)) $gameParty._items[it.id] = nv2;
+							}
+						} catch (e) { console.error('apply inline edit error', e); }
+						daerty5.update_menu();
+					});
+					rowDiv.appendChild(inp);
+				}
+
+				containerDiv.appendChild(rowDiv);
+			})(results[i]);
+		}
+	}
+
+	// virtualization vs pagination
+	if (daerty5.searchState.virtual && results.length > 0) {
+		// estimate rowHeight and visible count
+		var rowHeight = 34; // px
+		var visible = Math.ceil(320 / rowHeight) + 4;
+		containerDiv.style.height = '320px';
+		containerDiv.addEventListener('scroll', function () {
+			var start = Math.floor(containerDiv.scrollTop / rowHeight);
+			renderRows(start, visible);
+		});
+		// initialize
+		renderRows(0, visible);
+	} else {
+		// simple pagination: render first page of perPage
+		var perPage = daerty5.searchState.perPage;
+		renderRows(0, perPage);
+	}
+});
 
 daerty5.menus.splice(0, 0, function () {
 	daerty5.append_cheat_title("Save and Recall");
