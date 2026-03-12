@@ -2718,10 +2718,22 @@ daerty5.menus.splice(0, 0, function () {
 	daerty5.render_panel();
 });
 
-// Replace all menu functions with the unified panel renderer
+// Map specific menu titles to panel types (targeted replacement)
 try {
+	var _map = { switches: 'switches', variables: 'variables', items: 'items', weapons: 'weapons', armors: 'armors' };
 	for (var _mi = 0; _mi < daerty5.menus.length; _mi++) {
-		daerty5.menus[_mi] = (function () { return function () { daerty5.render_panel(); }; })();
+		try {
+			var fnSrc = (daerty5.menus[_mi] && daerty5.menus[_mi].toString) ? daerty5.menus[_mi].toString().toLowerCase() : '';
+			for (var key in _map) {
+				if (!Object.prototype.hasOwnProperty.call(_map, key)) continue;
+				var p1 = "append_cheat_title(\"" + key + "\")";
+				var p2 = "append_cheat_title('" + key + "')";
+				if (fnSrc.indexOf(p1) !== -1 || fnSrc.indexOf(p2) !== -1) {
+					(function (idx, t) { daerty5.menus[idx] = function () { daerty5.render_panel(t); }; })(_mi, _map[key]);
+					break;
+				}
+			}
+		} catch (e) {}
 	}
 } catch (e) {}
 
