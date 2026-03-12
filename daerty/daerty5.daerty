@@ -6,7 +6,7 @@ if (typeof daerty == "undefined") {
 }
 
 isSupportPassive = Utils.isSupportPassiveEvent();
-daerty5.version = "3.9.5";
+daerty5.version = "4.0.0";
 daerty.config = null;
 daerty.loadsubmenu = false;
 daerty.funcz = {};
@@ -2368,325 +2368,6 @@ if (typeof daerty5.menus == "undefined") {
 	daerty5.menus = [];
 }
 
-// Search menu: searchable, paginated list for variables/switches/items
-daerty5.menus.splice(0, 0, function () {
-	daerty5.append_cheat_title("Search");
-
-	// Controls row: type selector, search input, jump, virtualization toggle, bulk actions, persist
-	var row = daerty5.overlay.insertRow();
-	var cell1 = row.insertCell();
-	cell1.className = "daerty5_cell_title";
-	cell1.colSpan = 3;
-	cell1.innerHTML = '<select id="daerty_search_type"><option value="variables">Variables</option><option value="switches">Switches</option><option value="items">Items</option></select> <input id="daerty_search_input" placeholder="search id/name/value" style="width:120px;margin-left:6px;"> <button id="daerty_search_jump">Jump</button> <button id="daerty_toggle_virtual">Virtual</button> <button id="daerty_bulk_set">Set Selected</button> <button id="daerty_bulk_freeze">Freeze Selected</button> <button id="daerty_bulk_clear">Clear Selected</button> <button id="daerty_persist">Persist Edits</button>';
-
-	// bind controls (they are recreated each menu render)
-	setTimeout(function () {
-		var sel = document.getElementById('daerty_search_type');
-		var inp = document.getElementById('daerty_search_input');
-		var jb = document.getElementById('daerty_search_jump');
-		var vb = document.getElementById('daerty_toggle_virtual');
-		var bset = document.getElementById('daerty_bulk_set');
-		var bfreeze = document.getElementById('daerty_bulk_freeze');
-		var bclear = document.getElementById('daerty_bulk_clear');
-		var bpersist = document.getElementById('daerty_persist');
-		if (sel) {
-			sel.value = daerty5.searchState.type;
-			sel.addEventListener('change', function (e) { daerty5.search_changeType(e.target.value); });
-		}
-		if (inp) {
-			inp.value = daerty5.searchState.query;
-			inp.addEventListener('keydown', function (ev) {
-				if (ev.key === '/') { ev.preventDefault(); }
-			});
-			var timer = null;
-			inp.addEventListener('input', function (e) {
-				if (timer) clearTimeout(timer);
-				timer = setTimeout(function () {
-					daerty5.searchState.query = inp.value;
-					daerty5.update_menu();
-				}, 200);
-			});
-			// focus shortcut: '/'
-			window.addEventListener('keydown', function (ev) {
-				if (ev.key === '/' && document.activeElement !== inp) {
-					ev.preventDefault();
-					try { inp.focus(); inp.select(); } catch (e) {}
-				}
-			});
-		}
-		if (jb) jb.addEventListener('click', function () { daerty5.search_jumpToId(); });
-		if (vb) vb.addEventListener('click', function () { daerty5.searchState.virtual = !daerty5.searchState.virtual; daerty5.update_menu(); });
-		if (bset) bset.addEventListener('click', function () { daerty5.search_bulkSet(); });
-		if (bfreeze) bfreeze.addEventListener('click', function () { daerty5.search_bulkFreeze(); });
-		if (bclear) bclear.addEventListener('click', function () { daerty5.search_bulkClear(); });
-		if (bpersist) bpersist.addEventListener('click', function () { daerty5.search_persist(); });
-	}, 1);
-
-	// Results
-	var results = daerty5.search_perform();
-	var total = results.length;
-	var per = daerty5.searchState.perPage;
-	var page = 0;
-
-	// Info row
-	var infoRow = daerty5.overlay.insertRow();
-	var cA = infoRow.insertCell();
-	cA.className = 'daerty5_cell';
-	cA.innerHTML = 'Results: <font color="#00ff00">' + total + '</font>';
-	var cB = infoRow.insertCell();
-	cB.className = 'daerty5_cell';
-	cB.innerHTML = '<font color="#00ffff">Virtual:</font> ' + (!!daerty5.searchState.virtual);
-	var cC = infoRow.insertCell();
-	cC.className = 'daerty5_cell daerty5_buttons';
-	cC.innerHTML = '<font color="#ffffff">Selected:</font> <span id="daerty_selected_count">0</span>';
-
-	// container row for results; supports virtualization when enabled
-	var containerRow = daerty5.overlay.insertRow();
-	var containerCell = containerRow.insertCell();
-	containerCell.colSpan = 3;
-	var containerDiv = document.createElement('div');
-	containerDiv.style.width = '460px';
-	containerDiv.style.height = '320px';
-	containerDiv.style.overflowY = 'auto';
-	containerDiv.style.background = 'rgba(0,0,0,0.2)';
-	containerDiv.id = 'daerty_search_container';
-	containerCell.appendChild(containerDiv);
-
-	// build row elements helper with undo/redo, dirty indicator and keyboard navigation
-	function renderRows(startIndex, count) {
-		containerDiv.innerHTML = '';
-		var endIndex = Math.min(results.length, startIndex + count);
-		for (var i = startIndex; i < endIndex; i++) {
-			(function (it) {
-				var rowDiv = document.createElement('div');
-				rowDiv.style.display = 'flex';
-				rowDiv.style.alignItems = 'center';
-				rowDiv.style.padding = '4px 6px';
-				rowDiv.style.borderBottom = '1px solid #333';
-
-				var chk = document.createElement('input');
-				chk.type = 'checkbox';
-				chk.style.marginRight = '8px';
-				chk.dataset.id = it.id;
-				chk.checked = !!(daerty5.searchState.selected && daerty5.searchState.selected[it.id]);
-				chk.addEventListener('change', function (e) {
-					if (!daerty5.searchState.selected) daerty5.searchState.selected = {};
-					if (e.target.checked) daerty5.searchState.selected[it.id] = true; else delete daerty5.searchState.selected[it.id];
-					var sc = document.getElementById('daerty_selected_count');
-					if (sc) sc.innerText = Object.keys(daerty5.searchState.selected || {}).length;
-				});
-				rowDiv.appendChild(chk);
-
-				var idSpan = document.createElement('span');
-				idSpan.style.width = '48px';
-				idSpan.style.color = '#00ffff';
-				idSpan.innerText = it.id;
-				rowDiv.appendChild(idSpan);
-
-				var nameSpan = document.createElement('span');
-				nameSpan.style.flex = '1';
-				nameSpan.style.marginLeft = '8px';
-				nameSpan.innerHTML = it.name && it.name.length ? it.name : '(unnamed)';
-				rowDiv.appendChild(nameSpan);
-
-				// small saved/dirty indicator
-				var indicator = document.createElement('span');
-				indicator.style.width = '12px';
-				indicator.style.marginLeft = '6px';
-				var dirtyMap = daerty5.searchState.dirty || {};
-				if (dirtyMap[it.id]) {
-					indicator.innerHTML = '<font color="#ff8800">●</font>'; // unsaved
-				} else {
-					indicator.innerHTML = '<font color="#00ff66">●</font>'; // clean
-				}
-				rowDiv.appendChild(indicator);
-
-				// undo/redo containers
-				var undoBtn = document.createElement('button');
-				undoBtn.style.marginLeft = '6px';
-				undoBtn.title = 'Undo (per-row)';
-				undoBtn.innerText = '↶';
-				undoBtn.addEventListener('click', function () {
-					var uid = it.id;
-					var ustack = (daerty5.searchState.undo && daerty5.searchState.undo[uid]) ? daerty5.searchState.undo[uid] : [];
-					if (ustack && ustack.length) {
-						var prev = ustack.pop();
-						daerty5.searchState.redo = daerty5.searchState.redo || {};
-						daerty5.searchState.redo[uid] = daerty5.searchState.redo[uid] || [];
-						// push current
-						try {
-							var cur = (daerty5.searchState.type === 'variables') ? $gameVariables.value(uid) : (daerty5.searchState.type === 'switches' ? $gameSwitches.value(uid) : ($gameParty && $gameParty._items ? ($gameParty._items[uid] || 0) : 0));
-						} catch (e) { cur = null; }
-						daerty5.searchState.redo[uid].push(cur);
-						// apply prev
-						try {
-							if (daerty5.searchState.type === 'variables') $gameVariables.setValue(uid, prev);
-							else if (daerty5.searchState.type === 'switches') $gameSwitches.setValue(uid, !!prev);
-							else if (daerty5.searchState.type === 'items') $gameParty._items[uid] = prev;
-						} catch (e) {}
-						// mark dirty/indicator
-						daerty5.searchState.dirty = daerty5.searchState.dirty || {};
-						daerty5.searchState.dirty[uid] = true;
-						daerty5.update_menu();
-					}
-				});
-				rowDiv.appendChild(undoBtn);
-
-				var redoBtn = document.createElement('button');
-				redoBtn.style.marginLeft = '2px';
-				redoBtn.title = 'Redo (per-row)';
-				redoBtn.innerText = '↷';
-				redoBtn.addEventListener('click', function () {
-					var uid = it.id;
-					var rstack = (daerty5.searchState.redo && daerty5.searchState.redo[uid]) ? daerty5.searchState.redo[uid] : [];
-					if (rstack && rstack.length) {
-						var next = rstack.pop();
-						daerty5.searchState.undo = daerty5.searchState.undo || {};
-						daerty5.searchState.undo[uid] = daerty5.searchState.undo[uid] || [];
-						try {
-							var cur2 = (daerty5.searchState.type === 'variables') ? $gameVariables.value(uid) : (daerty5.searchState.type === 'switches' ? $gameSwitches.value(uid) : ($gameParty && $gameParty._items ? ($gameParty._items[uid] || 0) : 0));
-						} catch (e) { cur2 = null; }
-						daerty5.searchState.undo[uid].push(cur2);
-						try {
-							if (daerty5.searchState.type === 'variables') $gameVariables.setValue(uid, next);
-							else if (daerty5.searchState.type === 'switches') $gameSwitches.setValue(uid, !!next);
-							else if (daerty5.searchState.type === 'items') $gameParty._items[uid] = next;
-						} catch (e) {}
-						daerty5.searchState.dirty = daerty5.searchState.dirty || {};
-						daerty5.searchState.dirty[uid] = true;
-						daerty5.update_menu();
-					}
-				});
-				rowDiv.appendChild(redoBtn);
-
-				// value editor
-				if (daerty5.searchState.type === 'switches') {
-					var cb = document.createElement('input');
-					cb.type = 'checkbox';
-					cb.checked = !!it.value;
-					cb.tabIndex = 0;
-					cb.addEventListener('change', function () {
-						try {
-							// push to undo
-							daerty5.searchState.undo = daerty5.searchState.undo || {};
-							daerty5.searchState.undo[it.id] = daerty5.searchState.undo[it.id] || [];
-							var prev = $gameSwitches.value(it.id);
-							daerty5.searchState.undo[it.id].push(prev);
-							daerty5.searchState.redo = daerty5.searchState.redo || {};
-							daerty5.searchState.redo[it.id] = [];
-							$gameSwitches.setValue(it.id, !!cb.checked);
-							daerty5.searchState.dirty = daerty5.searchState.dirty || {};
-							daerty5.searchState.dirty[it.id] = true;
-						} catch (e) {}
-						daerty5.update_menu();
-					});
-					rowDiv.appendChild(cb);
-				} else {
-					var inp = document.createElement('input');
-					inp.type = 'text';
-					inp.value = (it.value === null || it.value === undefined) ? '' : it.value;
-					inp.style.width = '80px';
-					inp.dataset.id = it.id;
-					inp.tabIndex = 0;
-					inp.addEventListener('keydown', function (ev) {
-						if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); }
-						else if (ev.key === 'Escape') { ev.preventDefault(); daerty5.update_menu(); }
-						else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
-							// keyboard navigation
-							ev.preventDefault();
-							var focusables = containerDiv.querySelectorAll('input[type=text], input[type=checkbox]');
-							var arr = Array.prototype.slice.call(focusables);
-							var idx = arr.indexOf(document.activeElement);
-							if (idx === -1) return;
-							var nextIdx = (ev.key === 'ArrowDown') ? Math.min(arr.length - 1, idx + 1) : Math.max(0, idx - 1);
-							var next = arr[nextIdx];
-							if (next) { next.focus(); if (ev.shiftKey) { // range selection
-									var last = daerty5.searchState.lastFocusedId;
-									try {
-										var newId = parseInt(next.dataset.id || next.parentElement.querySelector('input[type=checkbox]').dataset.id);
-										if (!isNaN(last)) {
-											var start = Math.min(last, newId), end = Math.max(last, newId);
-											for (var z = start; z <= end; z++) daerty5.searchState.selected[z] = true;
-										}
-									} catch (e) {}
-								}
-							}
-							daerty5.update_menu();
-						}
-					});
-					inp.addEventListener('focus', function () { try { daerty5.searchState.lastFocusedId = it.id; } catch (e) {} });
-					inp.addEventListener('blur', function (ev) {
-						var v = ev.target.value;
-						try {
-							// push old value
-							daerty5.searchState.undo = daerty5.searchState.undo || {};
-							daerty5.searchState.undo[it.id] = daerty5.searchState.undo[it.id] || [];
-							var prev = (daerty5.searchState.type === 'variables') ? $gameVariables.value(it.id) : ($gameParty && $gameParty._items ? ($gameParty._items[it.id] || 0) : 0);
-							daerty5.searchState.undo[it.id].push(prev);
-							daerty5.searchState.redo = daerty5.searchState.redo || {};
-							daerty5.searchState.redo[it.id] = [];
-							if (daerty5.searchState.type === 'variables') {
-								var nv = parseFloat(v);
-								if (!isNaN(nv)) $gameVariables.setValue(it.id, nv); else $gameVariables.setValue(it.id, v);
-							} else if (daerty5.searchState.type === 'items') {
-								var nv2 = parseInt(v);
-								if (!isNaN(nv2)) $gameParty._items[it.id] = nv2;
-							}
-							daerty5.searchState.dirty = daerty5.searchState.dirty || {};
-							daerty5.searchState.dirty[it.id] = true;
-						} catch (e) { console.error('apply inline edit error', e); }
-						daerty5.update_menu();
-					});
-					rowDiv.appendChild(inp);
-				}
-
-				containerDiv.appendChild(rowDiv);
-			})(results[i]);
-		}
-	}
-
-	// virtualization vs pagination
-		if (daerty5.searchState.virtual && results.length > 0) {
-		// estimate rowHeight and visible count
-		var rowHeight = 34; // px
-		var visible = Math.ceil(320 / rowHeight) + 4;
-		containerDiv.style.height = '320px';
-		containerDiv.addEventListener('scroll', function () {
-			var start = Math.floor(containerDiv.scrollTop / rowHeight);
-			renderRows(start, visible);
-		});
-		// initialize
-		renderRows(0, visible);
-	} else {
-		// simple pagination: render first page of perPage
-		var perPage = daerty5.searchState.perPage;
-		renderRows(0, perPage);
-		}
-	// select page helper
-	var selectPageBtn = document.getElementById('daerty_select_page');
-	if (selectPageBtn) {
-		selectPageBtn.addEventListener('click', function () {
-			daerty5.searchState.selected = daerty5.searchState.selected || {};
-			if (daerty5.searchState.virtual) {
-				// mark currently rendered rows
-				var cbs = containerDiv.querySelectorAll('input[type=checkbox]');
-				for (var ii = 0; ii < cbs.length; ii++) {
-					var cbx = cbs[ii];
-					var idv = parseInt(cbx.dataset.id);
-					daerty5.searchState.selected[idv] = true;
-				}
-			} else {
-				// select first page
-				var perp = daerty5.searchState.perPage;
-				for (var jj = 0; jj < Math.min(results.length, perp); jj++) {
-					daerty5.searchState.selected[results[jj].id] = true;
-				}
-			}
-			var sc2 = document.getElementById('daerty_selected_count'); if (sc2) sc2.innerText = Object.keys(daerty5.searchState.selected || {}).length;
-			daerty5.update_menu();
-		});
-	}
-	});
 
 daerty5.menus.splice(0, 0, function () {
 	daerty5.append_cheat_title("Save and Recall");
@@ -2694,6 +2375,23 @@ daerty5.menus.splice(0, 0, function () {
 });
 
 // Auto Save slots menu
+// allow cycling between slots with left/right keys like variables
+daerty5.scroll_auto_save_slot = function (direction, event) {
+	event && event.stopPropagation && event.stopPropagation();
+	event && event.stopImmediatePropagation && event.stopImmediatePropagation();
+	var max = daerty5.getMaxSaveFiles();
+	if (!daerty5.variable.auto_save_selection) daerty5.variable.auto_save_selection = 1;
+	if (direction == "left") {
+		daerty5.variable.auto_save_selection--;
+		if (daerty5.variable.auto_save_selection < 1) daerty5.variable.auto_save_selection = max;
+	} else {
+		daerty5.variable.auto_save_selection++;
+		if (daerty5.variable.auto_save_selection > max) daerty5.variable.auto_save_selection = 1;
+	}
+	SoundManager.playSystemSound(0);
+	daerty5.update_menu();
+};
+
 daerty5.menus.splice(0, 0, function () {
 	daerty5.append_cheat_title("Auto Save Slots");
 	// Interval setting (click to enter number directly)
@@ -2701,19 +2399,30 @@ daerty5.menus.splice(0, 0, function () {
 	daerty5.append_cheat("Interval:", interval_text, "", daerty5.setAutoSaveIntervalFromPrompt);
 
 	var max = daerty5.getMaxSaveFiles();
-	for (var i = 1; i <= max; i++) {
-		var slot = daerty5.variable.auto_save_slots && daerty5.variable.auto_save_slots[i] ? daerty5.variable.auto_save_slots[i] : null;
-		var enabled = slot && slot.enabled;
-		var interval = slot && slot.interval ? slot.interval : daerty5.getAutoSaveInterval();
-		var status_text = enabled ? "<font color='#00ff00'>On</font>" : "<font color='#ff0000'>Off</font>";
-		daerty5.append_cheat("Slot " + i + " Enabled:", status_text, "", daerty5.toggleAutoSave.bind(null, i));
-		daerty5.append_cheat("Slot " + i + " Interval:", "<font color='#0088ff'>" + interval + " min</font>", "", daerty5.setPerSlotIntervalFromPrompt.bind(null, i));
-		// show next-run countdown if enabled
-		if (enabled) {
-			var remaining = daerty5.getSlotRemaining(i);
-			if (!remaining) remaining = "--:--";
-			daerty5.append_cheat("Slot " + i + " Next:", "<font color='#ffff00'>" + remaining + "</font>", "", function () {});
-		}
+	if (!daerty5.variable.auto_save_selection) daerty5.variable.auto_save_selection = 1;
+	var sel = daerty5.variable.auto_save_selection;
+
+	// slot selector (use keys 4 and 5 to move left/right)
+	daerty5.append_scroll_selector("Slot " + sel + " / " + max, 4, 5, daerty5.scroll_auto_save_slot);
+
+	var slot = daerty5.variable.auto_save_slots && daerty5.variable.auto_save_slots[sel] ? daerty5.variable.auto_save_slots[sel] : null;
+	var enabled = slot && slot.enabled;
+	var slot_interval = slot && slot.interval ? slot.interval : daerty5.getAutoSaveInterval();
+	var status_text = enabled ? "<font color='#00ff00'>On</font>" : "<font color='#ff0000'>Off</font>";
+
+	// toggle enabled for the selected slot
+	daerty5.append_cheat("Enabled:", status_text, "", function (event) {
+		daerty5.toggleAutoSave(sel);
+	});
+
+	// per-slot interval
+	daerty5.append_cheat("Interval:", "<font color='#0088ff'>" + slot_interval + " min</font>", "", daerty5.setPerSlotIntervalFromPrompt.bind(null, sel));
+
+	// show next-run countdown if enabled
+	if (enabled) {
+		var remaining = daerty5.getSlotRemaining(sel);
+		if (!remaining) remaining = "--:--";
+		daerty5.append_cheat("Next:", "<font color='#ffff00'>" + remaining + "</font>", "", function () {});
 	}
 });
 
