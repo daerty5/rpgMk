@@ -2829,6 +2829,53 @@ try {
 	}
 } catch (e) {}
 
+// Ensure overlay opener has a click handler to toggle the menu
+try {
+	if (daerty5.overlay_box2) {
+		daerty5.overlay_box2.addEventListener('click', function (ev) {
+			try {
+				ev.stopPropagation();
+				if (!daerty5.daerty5_open) {
+					daerty5.daerty5_open = true;
+					document.body.appendChild(daerty5.overlay_box);
+					document.body.appendChild(daerty5.overlay);
+					daerty5.update_menu();
+					SoundManager && SoundManager.playSystemSound && SoundManager.playSystemSound(1);
+				} else {
+					daerty5.daerty5_open = false;
+					daerty5.overlay_box.remove();
+					daerty5.overlay.remove();
+					SoundManager && SoundManager.playSystemSound && SoundManager.playSystemSound(2);
+				}
+			} catch (e) { console.error('overlay_box2 click error', e); }
+		});
+	}
+} catch (e) {}
+
+// Add a robust global key listener (capture) for the '1' key to toggle the menu.
+try {
+	document.addEventListener('keydown', function (ev) {
+		if (ev.key === '1' && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+			try {
+				ev.stopPropagation();
+				ev.preventDefault();
+				if (!daerty5.daerty5_open) {
+					daerty5.daerty5_open = true;
+					document.body.appendChild(daerty5.overlay_box);
+					document.body.appendChild(daerty5.overlay);
+					daerty5.update_menu();
+					SoundManager && SoundManager.playSystemSound && SoundManager.playSystemSound(1);
+				} else {
+					daerty5.daerty5_open = false;
+					daerty5.overlay_box.remove();
+					daerty5.overlay.remove();
+					SoundManager && SoundManager.playSystemSound && SoundManager.playSystemSound(2);
+				}
+			} catch (e) { console.error('global toggle key handler error', e); }
+		}
+	}, true);
+} catch (e) {}
+
 /////////////////////////////////////////////////
 // Cheat Menu Key Listener
 /////////////////////////////////////////////////
